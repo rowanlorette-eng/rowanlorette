@@ -1,0 +1,37 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  background: #121212;
+  color: #fff;
+}
+
+.topbar {
+  display: flex;
+  gap: 20px;
+  padding: 15px;
+  background: #1f1f1f;
+  align-items: center;
+}
+
+.topbar a {
+  color: #fff;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.topbar a:hover {
+  text-decoration: underline;
+}
+
+.container {
+  padding: 20px;
+}
+
+h1 {
+  margin-top: 0;
+}
+
+p {
+  max-width: 700px;
+  line-height: 1.6;
+}

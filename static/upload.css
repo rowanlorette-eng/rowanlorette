@@ -1,0 +1,101 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  background: #121212;
+  color: #fff;
+}
+
+.topbar {
+  display: flex;
+  gap: 20px;
+  padding: 15px;
+  background: #1f1f1f;
+  align-items: center;
+}
+
+.topbar a {
+  color: #fff;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.topbar a:hover {
+  text-decoration: underline;
+}
+
+.container {
+  padding: 20px;
+}
+
+input, button {
+  display: block;
+  margin: 10px 0;
+  padding: 10px;
+  width: 100%;
+  max-width: 500px;
+  box-sizing: border-box;
+}
+
+button {
+  cursor: pointer;
+  background: #ff0000;
+  color: #fff;
+  border: none;
+  font-weight: bold;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+.btn.hide {
+  opacity: 0;
+  transform: translateY(-20px);
+  pointer-events: none;
+}
+
+.status {
+  margin-top: 15px;
+  font-size: 14px;
+}
+
+.progress {
+  margin-top: 10px;
+  width: 100%;
+  max-width: 500px;
+  height: 12px;
+  background: #2a2a2a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.bar {
+  height: 100%;
+  width: 0%;
+  background: #ff0000;
+  transition: width 0.2s ease;
+}
+
+.meta {
+  margin-top: 20px;
+}
+
+.duration {
+  margin-top: 10px;
+}
+
+.thumbInfo {
+  margin-top: 10px;
+}
+
+.thumbPreview img {
+  width: 100%;
+  max-width: 500px;
+  margin-top: 10px;
+  border-radius: 8px;
+}
+
+.save {
+  margin-top: 20px;
+}

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="upload.css">
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <a href="index.html">Home</a>
+      <a href="watch.html">Watch</a>
+    </div>
+
+    <h1>Upload video</h1>
+
+    <input type="file" id="f" accept="video/*">
+
+    <button id="btn" class="btn">
+      Upload
+    </button>
+
+    <div id="status" class="status"></div>
+
+    <div id="progress" class="progress">
+      <div id="bar" class="bar"></div>
+    </div>
+
+    <div id="meta" class="meta" style="display:none;">
+      <label>Название видео:</label>
+      <input id="title" type="text">
+
+      <div class="duration">
+        <span>Длительность: </span><span id="durationText">00:00</span>
+      </div>
+
+      <label>Выберите кадр для превью:</label>
+      <input id="thumbSlider" type="range" min="0" max="100" value="0">
+      <div class="thumbInfo">
+        <span>Время превью: </span><span id="thumbTime">00:00</span>
+      </div>
+
+      <div class="thumbPreview">
+        <img id="thumbImg" src="" alt="Preview">
+      </div>
+
+      <button id="saveBtn" class="btn save">
+        Save and publish
+      </button>
+    </div>
+
+    <button id="watchBtn" class="watchBtn" style="display:none;">
+      Перейти к просмотру
+    </button>
+  </div>
+
+  <script src="upload.js"></script>
+</body>
+</html>
