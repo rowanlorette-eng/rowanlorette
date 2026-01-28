@@ -169,7 +169,7 @@ saveBtn.onclick = async () => {
 
       watchBtn.style.display = "block"
       watchBtn.onclick = () => {
-        location.href = `watch?v=${currentId}`
+        location.href = `watch.html?v=${currentId}`
       }
       return
     }

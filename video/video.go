@@ -44,7 +44,7 @@ func Register(mux *http.ServeMux) {
 }
 
 func serveWatch(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "watch.html")
+	http.ServeFile(w, r, "static/watch.html")
 }
 
 type Video struct {
