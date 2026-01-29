@@ -1,8 +1,41 @@
 body {
-  margin: 0;
   font-family: Arial, sans-serif;
-  background: #0f0f0f;
+  margin: 0;
+  background: #121212;
   color: #fff;
+}
+header {
+  background: #1f1f1f;
+  padding: 10px 40px;
+  position: sticky;
+  z-index: 1000;
+  top: 0;
+}
+
+nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-direction: row-reverse;
+}
+
+.logo {
+  font-size: 22px;
+  font-weight: bold;
+  color: #4da3ff;
+}
+
+.nav-links a {
+  margin-left: 20px;
+  text-decoration: none;
+  color: #ffffff;
+  opacity: 0.85;
+  font-weight: bold;
+}
+
+.nav-links a:hover {
+  color: #4da3ff;
+  opacity: 1;
 }
 
 .topbar {
@@ -32,7 +65,7 @@ body {
 .video-wrapper {
   position: relative;
   width: 100%;
-  height: 60vh;
+  aspect-ratio: 16 / 9;
   background: black;
   border-radius: 12px;
   overflow: hidden;
@@ -41,6 +74,7 @@ body {
 video {
   width: 100%;
   height: 100%;
+  object-fit: contain;
   background: black;
 }
 
@@ -82,6 +116,13 @@ video {
   opacity: 0;
   transform: translateY(20px);
   transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.icon-btn {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  opacity: 0.9;
 }
 
 .video-wrapper:hover .controls,
@@ -220,6 +261,96 @@ video {
   color: #bfbfbf;
   margin-top: 6px;
 }
+
+.settings-menu {
+  position: absolute;
+  bottom: 60px;
+  right: 16px;
+  width: 220px;
+  background: rgba(30,30,30,0.95);
+  border-radius: 10px;
+  font-size: 14px;
+  display: none;
+  flex-direction: column;
+  z-index: 20;
+}
+
+.settings-item {
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.settings-item:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+.settings-item.active::before {
+  content: "✔";
+  margin-right: 6px;
+  color: #4da3ff;
+}
+
+.settings-item .arrow {
+  margin-left: auto;
+  opacity: 0.6;
+}
+
+.settings-submenu {
+  display: none;
+  flex-direction: column;
+}
+
+.music {
+  margin-top: 20px;
+  background: #1b1b1b;
+  padding: 20px;
+  border-radius: 12px;
+}
+
+.audio-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.audio-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: #fff;
+}
+
+.audio-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.audio-btn {
+  padding: 6px 8px;
+  font-size: 18px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  color: white;
+  cursor: pointer;
+}
+
+.audio-btn:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+.progress-bar {
+  width: 100%;
+}
+
+.progress-bar .progress {
+  width: 100%;
+}
+
 
 
 /* MOBILE */

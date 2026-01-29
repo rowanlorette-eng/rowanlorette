@@ -4,6 +4,38 @@ body {
   background: #121212;
   color: #fff;
 }
+header {
+  background: #1f1f1f;
+  padding: 10px 40px;
+  position: sticky;
+  top: 0;
+}
+
+nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-direction: row-reverse;
+}
+
+.logo {
+  font-size: 22px;
+  font-weight: bold;
+  color: #4da3ff;
+}
+
+.nav-links a {
+  margin-left: 20px;
+  text-decoration: none;
+  color: #ffffff;
+  opacity: 0.85;
+  font-weight: bold;
+}
+
+.nav-links a:hover {
+  color: #4da3ff;
+  opacity: 1;
+}
 
 .topbar {
   display: flex;

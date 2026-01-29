@@ -48,3 +48,4 @@ Thumbs.db
 *.dylib
 *.out
 *.test
+.gitlab-ci.yml
