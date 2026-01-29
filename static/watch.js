@@ -302,18 +302,59 @@ document.querySelectorAll(".audio-player").forEach((player) => {
   });
 });
 
+// === Double tap seek (mobile like YouTube) ===
+let lastTapTime = 0;
+
+videoWrapper.addEventListener("touchend", (e) => {
+  const now = Date.now();
+  const touch = e.changedTouches[0];
+  const rect = videoWrapper.getBoundingClientRect();
+  const x = touch.clientX - rect.left;
+
+  if (now - lastTapTime < 300) {
+    if (x < rect.width / 2) {
+      player.currentTime = Math.max(0, player.currentTime - 10);
+    } else {
+      player.currentTime = Math.min(
+        player.duration || 0,
+        player.currentTime + 10,
+      );
+    }
+    showControls();
+    lastTapTime = 0;
+    return;
+  }
+
+  lastTapTime = now;
+});
+
 // ----------------- INIT -----------------
 videoWrapper.addEventListener("mousemove", showControls);
 videoWrapper.addEventListener("click", showControls);
 videoWrapper.addEventListener("mouseleave", hideControls);
 document.addEventListener("keydown", (e) => {
-  if (e.code === "Space") {
-    const active = document.activeElement;
-    if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA"))
-      return;
+  const active = document.activeElement;
+  if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA"))
+    return;
+
+  if (e.code === "ArrowLeft") {
     e.preventDefault();
-    if (player.paused) player.play();
-    else player.pause();
+    player.currentTime = Math.max(0, player.currentTime - 10);
+    showControls();
+  }
+
+  if (e.code === "ArrowRight") {
+    e.preventDefault();
+    player.currentTime = Math.min(
+      player.duration || 0,
+      player.currentTime + 10,
+    );
+    showControls();
+  }
+
+  if (e.code === "Space") {
+    e.preventDefault();
+    player.paused ? player.play() : player.pause();
   }
 });
 
