@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>buy APIs — Music</title>
+
+    <!-- CSS (выходим из pages/) -->
+    <link rel="stylesheet" href="../hub.css" />
+  </head>
+  <body>
+    <!-- 🔷 ОБЩАЯ ШТОРКА (та же, что и в index.html) -->
+    <header>
+      <nav>
+        <div class="logo">buy APIs</div>
+        <div class="nav-links">
+          <a href="../../index.html">Home</a>
+          <a href="../hub.html">Hub</a>
+          <a href="./downloads.html">Downloads</a>
+          <a href="#">Pricing</a>
+          <a href="#">FAQ</a>
+          <a href="#">Contact</a>
+          <a href="./music.html">Music</a>
+        </div>
+      </nav>
+    </header>
+
+    <!-- 🎵 СЕКЦИЯ С МУЗЫКОЙ -->
+    <section class="music">
+      <h1>Background Music</h1>
+      <p>Relax while browsing APIs</p>
+
+      <div class="audio-player">
+        <div class="audio-info">
+          <div class="audio-title">Alok & Bhaskar - FUEGO</div>
+          <div class="audio-time">
+            <span class="current-time">00:00</span> /
+            <span class="duration">00:00</span>
+          </div>
+        </div>
+
+        <div class="audio-controls">
+          <button class="rewind audio-btn">⏪</button>
+          <button class="play-pause audio-btn">▶️</button>
+          <button class="forward audio-btn">⏩</button>
+        </div>
+
+        <div class="progress-bar">
+          <input type="range" class="progress" value="0" min="0" max="100" />
+        </div>
+
+        <audio class="audio" src="../music/Alok&Bhaskar_FUEGO.mp3"></audio>
+      </div>
+
+      <div class="audio-player">
+        <div class="audio-info">
+          <div class="audio-title">Dapa Deep AnotherLie</div>
+          <div class="audio-time">
+            <span class="current-time">00:00</span> /
+            <span class="duration">00:00</span>
+          </div>
+        </div>
+
+        <div class="audio-controls">
+          <button class="rewind audio-btn">⏪</button>
+          <button class="play-pause audio-btn">▶️</button>
+          <button class="forward audio-btn">⏩</button>
+        </div>
+
+        <div class="progress-bar">
+          <input type="range" class="progress" value="0" min="0" max="100" />
+        </div>
+
+        <audio class="audio" src="../music/DapaDeep_AnotherLie.mp3"></audio>
+      </div>
+    </section>
+
+    <footer>© 2026 buy APIs. All rights reserved. Prices in USD ($).</footer>
+
+    <!-- JS -->
+    <script src="./scripts/music.js"></script>
+  </body>
+</html>
