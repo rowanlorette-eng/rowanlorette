@@ -35,7 +35,15 @@
               <button id="playPause" class="control-btn">▶</button>
 
               <div class="volume-wrap">
-                <button id="muteBtn" class="control-btn sound-btn">🔊</button>
+                <button id="muteBtn" class="control-btn sound-btn">
+                  <img
+                    id="volumeIcon"
+                    src="/icons/volume.png"
+                    class="icon-btn"
+                    alt="volume"
+                  />
+                </button>
+
                 <input
                   id="volume"
                   class="volume"
@@ -65,7 +73,7 @@
           <!-- settings menu -->
           <div class="settings-menu" id="settingsMenu">
             <div class="settings-item" id="qualityBtn">
-              <img src="/icons/setting.png" class="icon-btn" alt="settings" />
+              <img src="/icons/equalizer.png" class="icon-btn" alt="settings" />
               <span>Качество</span>
               <span class="arrow">›</span>
             </div>
@@ -107,7 +115,11 @@
               <button class="play-pause audio-btn">▶️</button>
               <button class="forward audio-btn">⏩</button>
               <button id="audioSettingsBtn" class="control-btn">
-                <img src="/icons/setting.png" class="icon-btn" alt="settings" />
+                <img
+                  src="/icons/settings.svg"
+                  class="icon-btn"
+                  alt="settings"
+                />
               </button>
             </div>
 

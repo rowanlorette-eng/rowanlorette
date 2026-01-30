@@ -22,7 +22,10 @@ nav {
 .logo {
   font-size: 22px;
   font-weight: bold;
-  color: #4da3ff;
+  background: linear-gradient(135deg, #4da3ff, #00ffcc, #872cb9);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .nav-links a {
@@ -92,7 +95,7 @@ video {
 
 .bigPlay {
   pointer-events: auto;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0, 0, 0, 0.6);
   border: none;
   color: white;
   font-size: 60px;
@@ -112,15 +115,17 @@ video {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0));
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0));
   opacity: 0;
   transform: translateY(20px);
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
 }
 
 .icon-btn {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   object-fit: contain;
   opacity: 0.9;
 }
@@ -144,30 +149,82 @@ video {
 }
 
 .control-btn {
-  background: rgba(0,0,0,0.6);
+  width: 36px;
+  height: 36px;
+  background: rgba(0, 0, 0, 0.6);
   border: none;
-  color: white;
-  padding: 8px 10px;
   border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  font-size: 18px;
+  color: #fff;
 }
 
 .control-btn:hover {
-  background: rgba(255,255,255,0.15);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .volume-wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  background: rgba(0,0,0,0.35);
-  border-radius: 20px;
+
+  width: 36px; /* ← только круг */
+  height: 36px;
+
+  background: rgba(30, 30, 30, 0.2);
+  border-radius: 999px;
+
+  overflow: hidden; /* ← КРИТИЧНО */
+  transition:
+    width 0.25s ease,
+    background 0.25s ease;
+}
+
+.volume-wrap:hover {
+  width: 140px; /* капсула */
+  background: rgba(0, 0, 0, 0.4);
 }
 
 .volume {
-  width: 100px;
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    width 0.25s ease,
+    opacity 0.2s ease;
+}
+
+.volume-wrap:hover .volume {
+  width: 90px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.volume {
+  margin-left: 8px;
+  appearance: none;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+}
+
+.volume:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.volume::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+}
+
+.sound-btn {
+  flex-shrink: 0;
 }
 
 .time {
@@ -184,10 +241,12 @@ video {
   appearance: none;
   height: 6px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.25);
+  background: rgba(255, 255, 255, 0.25);
   opacity: 0;
   transform: translateY(20px);
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
   z-index: 5;
 }
 
@@ -198,7 +257,7 @@ video {
   border-radius: 50%;
   background: #fff;
   cursor: pointer;
-  box-shadow: 0 0 0 3px rgba(255,255,255,0.25);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25);
 }
 
 .buffer {
@@ -208,10 +267,12 @@ video {
   bottom: 50px;
   height: 6px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.15);
+  background: rgba(255, 255, 255, 0.15);
   opacity: 0;
   transform: translateY(20px);
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
   z-index: 4;
 }
 
@@ -267,7 +328,7 @@ video {
   bottom: 60px;
   right: 16px;
   width: 220px;
-  background: rgba(30,30,30,0.95);
+  background: rgba(30, 30, 30, 0.95);
   border-radius: 10px;
   font-size: 14px;
   display: none;
@@ -284,7 +345,7 @@ video {
 }
 
 .settings-item:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .settings-item.active::before {
@@ -334,13 +395,13 @@ video {
   font-size: 18px;
   border: none;
   border-radius: 50%;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0, 0, 0, 0.6);
   color: white;
   cursor: pointer;
 }
 
 .audio-btn:hover {
-  background: rgba(255,255,255,0.15);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .progress-bar {
@@ -350,8 +411,6 @@ video {
 .progress-bar .progress {
   width: 100%;
 }
-
-
 
 /* MOBILE */
 @media (max-width: 768px) {

@@ -28,7 +28,10 @@ nav {
 .logo {
   font-size: 22px;
   font-weight: bold;
-  color: #4da3ff;
+  background: linear-gradient(135deg, #55a6fc, #1e6af8, #8d2bce);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .nav-links a {

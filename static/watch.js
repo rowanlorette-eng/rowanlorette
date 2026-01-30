@@ -5,6 +5,7 @@ const player = document.getElementById("player");
 const playPause = document.getElementById("playPause");
 const seek = document.getElementById("seek");
 const volume = document.getElementById("volume");
+const volumeIcon = document.getElementById("volumeIcon");
 const time = document.getElementById("time");
 const statusEl = document.getElementById("status");
 const overlay = document.getElementById("overlay");
@@ -218,25 +219,35 @@ seek.oninput = () => {
 
 // volume
 volume.oninput = () => {
-  player.volume = volume.value;
-  lastVolume = volume.value;
+  const v = Number(volume.value);
+  player.volume = v;
+
+  player.muted = v === 0;
+  if (v > 0) lastVolume = v;
+
   updateMuteIcon();
 };
 
 muteBtn.onclick = () => {
-  if (player.muted) {
+  if (player.muted || player.volume === 0) {
     player.muted = false;
-    volume.value = lastVolume;
+    player.volume = 1;
+    volume.value = 1;
   } else {
     player.muted = true;
+    player.volume = 0;
     volume.value = 0;
   }
+
   updateMuteIcon();
 };
 
 function updateMuteIcon() {
-  if (player.muted || player.volume === 0) muteBtn.innerText = "🔇";
-  else muteBtn.innerText = "🔊";
+  if (player.muted || player.volume === 0) {
+    volumeIcon.src = "/icons/mute.png";
+  } else {
+    volumeIcon.src = "/icons/volume.png";
+  }
 }
 
 // fullscreen
