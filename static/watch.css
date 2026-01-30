@@ -241,7 +241,7 @@ video {
   appearance: none;
   height: 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.251);
   opacity: 0;
   transform: translateY(20px);
   transition:

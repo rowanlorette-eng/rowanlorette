@@ -172,28 +172,34 @@ function hideControls() {
 }
 
 // play/pause
+const playPauseIcon = document.getElementById("playPauseIcon");
+
+// клик по кнопке
 playPause.onclick = () => {
   if (player.paused) player.play();
   else player.pause();
 };
 
+// клик по видео
 player.onclick = () => {
   if (player.paused) player.play();
   else player.pause();
 };
 
+// события плеера
 player.onpause = () => {
   overlay.style.display = "flex";
-  playPause.innerText = "▶";
+  playPauseIcon.src = "/icons/play.png";
   showControls();
 };
 
 player.onplay = () => {
   overlay.style.display = "none";
-  playPause.innerText = "⏸";
+  playPauseIcon.src = "/icons/pause.png"; //
   showControls();
 };
 
+// большая кнопка play в центре
 bigPlay.onclick = () => {
   player.play();
   overlay.style.display = "none";
