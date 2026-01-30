@@ -1,20 +1,11 @@
 const container = document.getElementById("video-container");
 const loader = document.getElementById("loader");
 
-let allVideos = [];
-let visibleCount = 0;
-
-const INITIAL_LOAD = 20;
-const LOAD_MORE = 10;
-let loading = false;
-
-// перемешивание массива (Fisher–Yates)
-function shuffle(array) {
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
-  }
-}
+let listOffset = 0;
+const LIST_LIMIT = 24; // количество видео при первой загрузке
+const LOAD_MORE = 5; // при скролле
+let listLoading = false;
+let listEnded = false;
 
 function createVideoCard(video) {
   const card = document.createElement("div");
@@ -44,50 +35,49 @@ function createVideoCard(video) {
   return card;
 }
 
-function renderMore() {
-  if (loading) return;
-  loading = true;
+async function loadVideos(initial = false) {
+  if (listLoading || listEnded) return;
+  listLoading = true;
 
-  const next = allVideos.slice(
-    visibleCount,
-    visibleCount + (visibleCount === 0 ? INITIAL_LOAD : LOAD_MORE),
-  );
+  const limit = initial ? LIST_LIMIT : LOAD_MORE;
 
-  next.forEach((video) => {
-    container.appendChild(createVideoCard(video));
-  });
-
-  visibleCount += next.length;
-
-  loader.style.display = visibleCount >= allVideos.length ? "none" : "block";
-
-  loading = false;
-}
-
-async function loadVideos() {
   try {
-    const res = await fetch("/api/videos");
-    const data = await res.json();
+    const res = await fetch(`/api/videos?offset=${listOffset}&limit=${limit}`);
+    let data = await res.json();
+    data = Array.isArray(data) ? data : []; // защита от null
 
-    // показываем только готовые видео
-    allVideos = data.filter((v) => v.status === "ready");
+    if (data.length === 0) {
+      listEnded = true;
+      if (loader) loader.style.display = "none";
+      return;
+    }
 
-    shuffle(allVideos);
-    renderMore();
+    data.forEach((v) => {
+      if (v.status === "ready") {
+        container.appendChild(createVideoCard(v));
+      }
+    });
+
+    listOffset += limit;
+
+    if (loader) loader.style.display = "block";
   } catch (e) {
-    loader.textContent = "Ошибка загрузки видео";
-    console.error(e);
+    console.error("Ошибка загрузки видео:", e);
+    if (loader) loader.textContent = "Ошибка загрузки видео";
+  } finally {
+    listLoading = false;
   }
 }
 
 // infinite scroll
 window.addEventListener("scroll", () => {
+  if (listLoading || listEnded) return;
   const scrollBottom =
     window.innerHeight + window.scrollY >= document.body.offsetHeight - 300;
-
-  if (scrollBottom && visibleCount < allVideos.length) {
-    renderMore();
+  if (scrollBottom) {
+    loadVideos();
   }
 });
 
-loadVideos();
+// первая загрузка
+loadVideos(true);

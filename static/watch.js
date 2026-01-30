@@ -1,5 +1,11 @@
 const params = new URLSearchParams(location.search);
 let id = params.get("v");
+
+let listOffset = 0;
+const LIST_LIMIT = 20;
+let listLoading = false;
+let listEnded = false;
+
 const shouldAutoplay = sessionStorage.getItem("autoplay") === "1";
 sessionStorage.removeItem("autoplay");
 
@@ -93,13 +99,32 @@ async function load() {
   // audio-only source
   audioPlayer.src = url;
 
-  loadVideoList();
+  loadVideoList(true);
 }
 
-async function loadVideoList() {
-  const videos = await fetch("/api/videos").then((r) => r.json());
+async function loadVideoList(reset = false) {
+  if (listLoading || listEnded) return;
+  listLoading = true;
+
   const list = document.getElementById("list");
-  list.innerHTML = "";
+
+  if (reset) {
+    list.innerHTML = "";
+    listOffset = 0;
+    listEnded = false;
+  }
+
+  const res = await fetch(
+    `/api/videos?offset=${listOffset}&limit=${LIST_LIMIT}`,
+  );
+
+  const videos = await res.json();
+
+  if (videos.length === 0) {
+    listEnded = true;
+    listLoading = false;
+    return;
+  }
 
   videos.forEach((v) => {
     const item = document.createElement("div");
@@ -108,13 +133,29 @@ async function loadVideoList() {
       <img class="thumb" src="${v.thumbnail}" />
       <div>
         <div class="itemTitle">${v.title}</div>
-        <div class="itemStatus">${v.status === "processing" ? "Processing..." : "Ready"}</div>
+        <div class="itemStatus">${
+          v.status === "processing" ? "Processing..." : "Ready"
+        }</div>
       </div>
     `;
     item.onclick = () => (location.href = `watch?v=${v.id}`);
     list.appendChild(item);
   });
+
+  listOffset += videos.length;
+  listLoading = false;
 }
+
+const listEl = document.getElementById("list");
+
+listEl.addEventListener("scroll", () => {
+  const nearBottom =
+    listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 50;
+
+  if (nearBottom) {
+    loadVideoList();
+  }
+});
 
 // ----------------- SETTINGS MENU -----------------
 settingsBtn.onclick = (e) => {

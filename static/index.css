@@ -49,13 +49,18 @@ nav {
 
 #video-container {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 16px;
   padding: 24px;
 }
 
 .video-card {
   cursor: pointer;
+  background: #151936;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .thumbnail {
@@ -76,26 +81,30 @@ nav {
   margin-top: 8px;
   font-size: 14px;
   line-height: 1.3;
+  padding: 0 8px 8px 8px;
+  text-align: center;
+  white-space: normal; /* Показываем весь текст */
+  overflow: visible;
+  text-overflow: clip;
 }
 
-/* адаптив */
 @media (max-width: 1400px) {
   #video-container {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   }
 }
 @media (max-width: 1100px) {
   #video-container {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   }
 }
 @media (max-width: 800px) {
   #video-container {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   }
 }
 @media (max-width: 500px) {
   #video-container {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
 }

@@ -56,8 +56,36 @@ type Video struct {
 	Progress  int    `json:"progress"`
 }
 
-func listVideos(w http.ResponseWriter, _ *http.Request) {
-	rows, _ := db.Query("SELECT id, title, status, thumbnail, progress FROM videos ORDER BY created_at DESC")
+func listVideos(w http.ResponseWriter, r *http.Request) {
+
+	offset := 0
+	limit := 10
+
+	if o := r.URL.Query().Get("offset"); o != "" {
+		fmt.Sscan(o, &offset)
+	}
+	if l := r.URL.Query().Get("limit"); l != "" {
+		fmt.Sscan(l, &limit)
+	}
+
+	if limit > 50 {
+		limit = 50
+	}
+
+	rows, err := db.Query(`
+		SELECT id, title, status, thumbnail, progress
+		FROM videos
+		WHERE status = 'ready'
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
+	`, limit, offset)
+
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	defer rows.Close()
+
 	var res []Video
 
 	for rows.Next() {
