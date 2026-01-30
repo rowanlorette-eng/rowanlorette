@@ -20,9 +20,7 @@ func Start_server() {
 	mux := http.NewServeMux()
 
 	// static
-	mux.Handle("/static/",
-		http.StripPrefix("/static/",
-			http.FileServer(http.Dir("./static"))))
+	mux.Handle("/", http.FileServer(http.Dir("./static")))
 
 	// video api
 	video.Register(mux)

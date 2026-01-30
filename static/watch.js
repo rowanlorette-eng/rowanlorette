@@ -1,5 +1,7 @@
 const params = new URLSearchParams(location.search);
 let id = params.get("v");
+const shouldAutoplay = sessionStorage.getItem("autoplay") === "1";
+sessionStorage.removeItem("autoplay");
 
 const player = document.getElementById("player");
 const playPause = document.getElementById("playPause");
@@ -68,10 +70,24 @@ async function load() {
     hlsInstance.loadSource(url);
     hlsInstance.attachMedia(player);
 
+    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+      if (shouldAutoplay) {
+        player.play().catch((e) => {
+          console.log("autoplay blocked", e);
+        });
+      }
+    });
+
     hlsInstance.on(Hls.Events.LEVEL_LOADED, updateBuffer);
     hlsInstance.on(Hls.Events.FRAG_BUFFERED, updateBuffer);
   } else {
     player.src = url;
+
+    if (shouldAutoplay) {
+      player.play().catch((e) => {
+        console.log("autoplay blocked", e);
+      });
+    }
   }
 
   // audio-only source

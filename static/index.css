@@ -46,3 +46,56 @@ nav {
   color: #4da3ff;
   opacity: 1;
 }
+
+#video-container {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  padding: 24px;
+}
+
+.video-card {
+  cursor: pointer;
+}
+
+.thumbnail {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #333;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-title {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+/* адаптив */
+@media (max-width: 1400px) {
+  #video-container {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+@media (max-width: 1100px) {
+  #video-container {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 800px) {
+  #video-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 500px) {
+  #video-container {
+    grid-template-columns: 1fr;
+  }
+}
