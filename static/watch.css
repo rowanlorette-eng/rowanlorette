@@ -412,6 +412,27 @@ video {
   width: 100%;
 }
 
+#list::-webkit-scrollbar {
+  width: 8px;
+}
+
+#list::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+}
+
+#list::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+#list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#list {
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
 /* MOBILE */
 @media (max-width: 768px) {
   .layout {

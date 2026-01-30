@@ -4,8 +4,8 @@ const loader = document.getElementById("loader");
 let allVideos = [];
 let visibleCount = 0;
 
-const INITIAL_LOAD = 25;
-const LOAD_MORE = 20;
+const INITIAL_LOAD = 20;
+const LOAD_MORE = 10;
 let loading = false;
 
 // перемешивание массива (Fisher–Yates)
