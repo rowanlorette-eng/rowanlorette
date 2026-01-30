@@ -227,6 +227,19 @@ func transcode(id, input, dir, thumbTime string) error {
 		return thumbErr
 	}
 
+	// перед удалением исходника
+	audioPath := filepath.Join(dir, "audio.mp3")
+	audioCmd := exec.Command("ffmpeg",
+		"-i", input,
+		"-q:a", "0",
+		"-map", "a",
+		audioPath,
+	)
+	audioOut, audioErr := audioCmd.CombinedOutput()
+	if audioErr != nil {
+		fmt.Println("AUDIO ERROR:", string(audioOut))
+	}
+
 	// 3) удаляем исходник
 	os.Remove(input)
 
