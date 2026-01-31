@@ -3,7 +3,7 @@ const loader = document.getElementById("loader");
 
 let listOffset = 0;
 const LIST_LIMIT = 24; // количество видео при первой загрузке
-const LOAD_MORE = 5; // при скролле
+const LOAD_MORE = 6; // при скролле
 let listLoading = false;
 let listEnded = false;
 
@@ -31,6 +31,7 @@ function createVideoCard(video) {
   const img = document.createElement("img");
   img.src = video.thumbnail || "";
   img.alt = video.title;
+  img.loading = "lazy";
 
   thumb.appendChild(img);
 

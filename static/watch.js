@@ -2,7 +2,10 @@ const params = new URLSearchParams(location.search);
 let id = params.get("v");
 
 let listOffset = 0;
-const LIST_LIMIT = 20;
+const LIST_LIMIT = 10;
+const LOAD_MORE = 5;
+const MAX_DOM_ITEMS = 50;
+
 let listLoading = false;
 let listEnded = false;
 
@@ -33,10 +36,20 @@ const audioPlayer = document.getElementById("audioPlayer");
 const audioTitle = document.getElementById("audioTitle");
 const audioSettingsBtn = document.getElementById("audioSettingsBtn");
 
+const topSpacer = document.getElementById("top-spacer");
+let removedHeight = 0;
+
 let hlsInstance = null;
 let lastVolume = 1;
 const AUTO_HIDE_MS = 3000;
 let hideTimer = null;
+
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}
 
 async function load() {
   if (!id) {
@@ -114,36 +127,50 @@ async function loadVideoList(reset = false) {
     listEnded = false;
   }
 
-  const res = await fetch(
-    `/api/videos?offset=${listOffset}&limit=${LIST_LIMIT}`,
-  );
+  const limit = reset ? LIST_LIMIT : LOAD_MORE;
 
-  const videos = await res.json();
+  try {
+    const res = await fetch(`/api/videos?offset=${listOffset}&limit=${limit}`);
+    let videos = await res.json();
+    videos = Array.isArray(videos) ? videos : [];
 
-  if (videos.length === 0) {
-    listEnded = true;
+    shuffle(videos); // ← случайный порядок
+
+    if (videos.length === 0) {
+      listEnded = true;
+      return;
+    }
+
+    videos.forEach((v) => {
+      const item = document.createElement("div");
+      item.className = "item";
+      item.innerHTML = `
+        <img class="thumb" src="${v.thumbnail}" loading="lazy" />
+        <div>
+          <div class="itemTitle">${v.title}</div>
+          <div class="itemStatus">
+            ${v.status === "processing" ? "Processing..." : "Ready"}
+          </div>
+        </div>
+      `;
+      item.onclick = () => (location.href = `watch?v=${v.id}`);
+      list.appendChild(item);
+    });
+
+    // --- VIRTUAL LIST: удаляем старые элементы сверху ---
+    while (list.children.length > MAX_DOM_ITEMS + 1) {
+      const first = list.children[1]; // [0] — spacer
+      removedHeight += first.offsetHeight;
+      list.removeChild(first);
+      topSpacer.style.height = removedHeight + "px";
+    }
+
+    listOffset += videos.length;
+  } catch (e) {
+    console.error("Ошибка загрузки списка:", e);
+  } finally {
     listLoading = false;
-    return;
   }
-
-  videos.forEach((v) => {
-    const item = document.createElement("div");
-    item.className = "item";
-    item.innerHTML = `
-      <img class="thumb" src="${v.thumbnail}" />
-      <div>
-        <div class="itemTitle">${v.title}</div>
-        <div class="itemStatus">${
-          v.status === "processing" ? "Processing..." : "Ready"
-        }</div>
-      </div>
-    `;
-    item.onclick = () => (location.href = `watch?v=${v.id}`);
-    list.appendChild(item);
-  });
-
-  listOffset += videos.length;
-  listLoading = false;
 }
 
 const listEl = document.getElementById("list");
@@ -155,6 +182,16 @@ listEl.addEventListener("scroll", () => {
   if (nearBottom) {
     loadVideoList();
   }
+});
+
+window.addEventListener("scroll", () => {
+  // если list сам скроллится — window не трогаем
+  if (listEl.scrollHeight > listEl.clientHeight) return;
+
+  const nearBottom =
+    window.innerHeight + window.scrollY >= document.body.offsetHeight - 300;
+
+  if (nearBottom) loadVideoList();
 });
 
 // ----------------- SETTINGS MENU -----------------

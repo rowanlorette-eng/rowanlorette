@@ -431,6 +431,8 @@ video {
 
 #list {
   scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+  overflow-y: auto;
+  max-height: 100vh;
 }
 
 /* MOBILE */
