@@ -3,7 +3,7 @@ let id = params.get("v");
 
 let listOffset = 0;
 const LIST_LIMIT = 10;
-const LOAD_MORE = 5;
+const LOAD_MORE = 10;
 const MAX_DOM_ITEMS = 50;
 
 let listLoading = false;
@@ -43,6 +43,73 @@ let hlsInstance = null;
 let lastVolume = 1;
 const AUTO_HIDE_MS = 3000;
 let hideTimer = null;
+
+const nextVideoBtn = document.getElementById("nextVideoBtn");
+
+async function playNextVideo() {
+  try {
+    // получаем список видео
+    const res = await fetch(`/api/videos?offset=0&limit=50`);
+    let videos = await res.json();
+    videos = Array.isArray(videos) ? videos : [];
+
+    // список просмотренных видео через автоплей и кнопку "следующее"
+    const watched = JSON.parse(
+      sessionStorage.getItem("autoplayWatched") || "[]",
+    );
+
+    // исключаем текущее видео и уже просмотренные
+    videos = videos.filter(
+      (v) => v.id !== id && v.status === "ready" && !watched.includes(v.id),
+    );
+
+    if (videos.length === 0) {
+      console.log("Нет новых видео для воспроизведения");
+      return;
+    }
+
+    const nextVideo = videos[0];
+
+    // добавляем текущее видео в watched
+    watched.push(id);
+    sessionStorage.setItem("autoplayWatched", JSON.stringify(watched));
+
+    // ставим autoplay на следующем видео
+    sessionStorage.setItem("autoplay", "1");
+    location.href = `/watch?v=${nextVideo.id}`;
+  } catch (e) {
+    console.error("Ошибка перехода к следующему видео:", e);
+  }
+}
+
+// клик по кнопке
+nextVideoBtn.onclick = (e) => {
+  e.stopPropagation();
+  playNextVideo();
+};
+
+// === Автовоспроизведение ===
+const autoplayBtn = document.getElementById("autoplayBtn");
+const autoplayIcon = document.getElementById("autoplayIcon");
+
+// читаем из localStorage (default = false)
+let autoplayEnabled = localStorage.getItem("autoplayEnabled") === "1";
+
+// обновляем иконку при загрузке страницы
+function updateAutoplayIcon() {
+  autoplayIcon.src = autoplayEnabled
+    ? "/icons/toggleon.png"
+    : "/icons/toggleoff.png";
+}
+updateAutoplayIcon();
+
+// переключение состояния по клику
+autoplayBtn.onclick = (e) => {
+  e.stopPropagation();
+  autoplayEnabled = !autoplayEnabled;
+  localStorage.setItem("autoplayEnabled", autoplayEnabled ? "1" : "0");
+  updateAutoplayIcon();
+};
 
 function shuffle(array) {
   for (let i = array.length - 1; i > 0; i--) {
@@ -471,3 +538,43 @@ document.addEventListener("keydown", (e) => {
 
 showControls();
 load();
+
+// ----------------- AUTOPLAY NEXT VIDEO -----------------
+player.onended = async () => {
+  overlay.style.display = "flex";
+  playPauseIcon.src = "/icons/play.png";
+
+  if (!autoplayEnabled) return;
+
+  try {
+    // получаем список следующих видео
+    const res = await fetch(`/api/videos?offset=0&limit=50`);
+    let videos = await res.json();
+    videos = Array.isArray(videos) ? videos : [];
+
+    // читаем список просмотренных видео (autoplay) из sessionStorage
+    const watched = JSON.parse(
+      sessionStorage.getItem("autoplayWatched") || "[]",
+    );
+
+    // фильтруем: исключаем текущее и уже просмотренные
+    videos = videos.filter(
+      (v) => v.id !== id && v.status === "ready" && !watched.includes(v.id),
+    );
+
+    if (videos.length === 0) return; // новых видео нет
+
+    // берем первое в списке
+    const nextVideo = videos[0];
+
+    // добавляем текущее видео в watched
+    watched.push(id);
+    sessionStorage.setItem("autoplayWatched", JSON.stringify(watched));
+
+    // ставим autoplay на следующем видео
+    sessionStorage.setItem("autoplay", "1");
+    location.href = `/watch?v=${nextVideo.id}`;
+  } catch (e) {
+    console.error("Ошибка автоперехода:", e);
+  }
+};
