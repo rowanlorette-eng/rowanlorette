@@ -1,8 +1,7 @@
 package main
 
-import "umbrella/start"
+import "umbrella/internal/start"
 
 func main() {
-
 	start.Start_server()
 }

@@ -8,3 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 });
+
+//const params = new URLSearchParams(location.search);
+//let id = params.get("v");
+//const video = await fetch(`/api/video/${id}`).then((r) => r.json());
