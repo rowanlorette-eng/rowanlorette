@@ -59,7 +59,7 @@ func ListVideos(storage *sqlite.Storage) http.HandlerFunc {
 				Status:    v.Status,
 				Progress:  v.Progress,
 				Thumbnail: v.Thumbnail,
-				StreamURL: "/api/stream/" + v.ID + "/index.m3u8", // путь к HLS
+				StreamURL: "/api/stream/" + v.ID,
 			})
 		}
 
@@ -124,6 +124,15 @@ func UploadHandler(storage *sqlite.Storage) http.HandlerFunc {
 	}
 }
 
+// Вспомогательная функция для JSON ошибок
+func writeJSONError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{
+		"error": msg,
+	})
+}
+
 func PublishHandler(storage *sqlite.Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.FormValue("id")
@@ -131,23 +140,29 @@ func PublishHandler(storage *sqlite.Storage) http.HandlerFunc {
 		thumbTime := r.FormValue("thumb_time")
 
 		if id == "" || title == "" || thumbTime == "" {
-			http.Error(w, "missing params", http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "missing parameters")
 			return
 		}
 
 		dir := filepath.Join("videos", id)
 		input := filepath.Join(dir, "input.mp4")
 
-		// Обновляем запись в БД через метод Storage
+		// Проверяем, что файл существует
+		if _, err := os.Stat(input); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "input video not found")
+			return
+		}
+
+		// Обновляем title и ставим статус processing
 		if err := storage.SetVideoProcessing(id, title); err != nil {
-			http.Error(w, "cannot update video", http.StatusInternalServerError)
+			writeJSONError(w, http.StatusInternalServerError, "cannot update video: "+err.Error())
+			fmt.Println("PUBLISH:", id, title, thumbTime)
 			return
 		}
 
 		// Запускаем транскодинг асинхронно
 		go func() {
-			err := Transcode(storage, id, input, dir, thumbTime)
-			if err != nil {
+			if err := Transcode(storage, id, input, dir, thumbTime); err != nil {
 				fmt.Println("TRANSCODE FAILED:", err)
 			}
 		}()
@@ -157,12 +172,12 @@ func PublishHandler(storage *sqlite.Storage) http.HandlerFunc {
 }
 
 func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error {
-	// 1) транскодинг в HLS
+	// 1) HLS
 	cmd := exec.Command("ffmpeg",
+		"-y",
 		"-i", input,
 		"-c:v", "libx264",
 		"-c:a", "aac",
-		"-b:a", "128k",
 		"-preset", "veryfast",
 		"-hls_time", "4",
 		"-hls_playlist_type", "vod",
@@ -170,55 +185,53 @@ func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error 
 		filepath.Join(dir, "index.m3u8"),
 	)
 
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
-	if err := cmd.Start(); err != nil {
+	out, err := cmd.CombinedOutput()
+	if err != nil {
 		storage.SetVideoError(id)
-		return err
+		return fmt.Errorf("ffmpeg HLS failed: %w\n%s", err, string(out))
 	}
 
-	// Можно читать stdout/stderr асинхронно (прогресс)
-	go func() { io.Copy(io.Discard, stdout) }()
-	go func() { io.Copy(io.Discard, stderr) }()
-
-	if err := cmd.Wait(); err != nil {
-		storage.SetVideoError(id)
-		return err
-	}
-
-	// 2) thumbnail
+	// 2) Thumbnail
 	thumbPath := filepath.Join(dir, "thumb.jpg")
 	thumbCmd := exec.Command("ffmpeg",
+		"-y",
 		"-ss", thumbTime,
 		"-i", input,
 		"-frames:v", "1",
 		"-q:v", "2",
 		thumbPath,
 	)
+
 	if out, err := thumbCmd.CombinedOutput(); err != nil {
-		fmt.Println("THUMB ERROR:", string(out))
 		storage.SetVideoError(id)
-		return err
+		return fmt.Errorf("ffmpeg thumb failed: %w\n%s", err, string(out))
 	}
 
-	// 3) audio extraction
-	audioPath := filepath.Join(dir, "audio.mp3")
+	if _, err := os.Stat(thumbPath); err != nil {
+		storage.SetVideoError(id)
+		return fmt.Errorf("thumbnail not created: %w", err)
+	}
+
+	// 3) Audio (не критично)
 	audioCmd := exec.Command("ffmpeg",
+		"-y",
 		"-i", input,
 		"-q:a", "0",
 		"-map", "a",
-		audioPath,
+		filepath.Join(dir, "audio.mp3"),
 	)
-	if out, err := audioCmd.CombinedOutput(); err != nil {
-		fmt.Println("AUDIO ERROR:", string(out))
-		// не критично, продолжаем
+	audioCmd.CombinedOutput() // ошибки логируем, но не падаем
+
+	// 4) Удаляем исходник
+	_ = os.Remove(input)
+
+	// 5) READY
+	if err := storage.SetVideoReadyWithThumbnail(
+		id,
+		"/api/stream/"+id+"/thumb.jpg",
+	); err != nil {
+		return fmt.Errorf("SetVideoReadyWithThumbnail failed: %w", err)
 	}
-
-	// 4) удаляем исходник
-	os.Remove(input)
-
-	// 5) сохраняем thumbnail и ставим ready
-	storage.SetVideoReadyWithThumbnail(id, "/api/stream/"+id+"/thumb.jpg")
 
 	return nil
 }
@@ -229,15 +242,16 @@ func GetVideoHandler(storage *sqlite.Storage) http.HandlerFunc {
 
 		v, err := storage.GetVideo(id)
 		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-			return
-		}
-		if v == nil {
-			http.NotFound(w, r)
+			// ⬇ ВАЖНО: во время processing это не ошибка сервера
+			writeJSONError(w, http.StatusOK, "processing")
 			return
 		}
 
-		// Формируем ответ для фронтенда
+		if v == nil {
+			writeJSONError(w, http.StatusNotFound, "video not found")
+			return
+		}
+
 		resp := VideoResponse{
 			ID:        v.ID,
 			Title:     v.Title,
@@ -257,9 +271,16 @@ func Stream(w http.ResponseWriter, r *http.Request) {
 	clean := filepath.Clean(path)
 
 	if strings.Contains(clean, "..") {
-		http.Error(w, "forbidden", 403)
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
-	http.ServeFile(w, r, filepath.Join("videos", clean))
+	full := filepath.Join("videos", clean)
+
+	if _, err := os.Stat(full); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	http.ServeFile(w, r, full)
 }
