@@ -9,11 +9,10 @@ import (
 )
 
 func Start_server() {
-	cfg := config.MustLoad()
-	videoDataBase := cfg.StoragePath
-	Static := cfg.Static
-	addr := cfg.HTTPServer.Address
-	port := cfg.HTTPServer.Port
+	videoDataBase := config.CFG.StoragePath
+	Static := config.CFG.Static
+	addr := config.CFG.HTTPServer.Address
+	port := config.CFG.HTTPServer.Port
 
 	storage, err := sqlite.Init(videoDataBase)
 	if err != nil {

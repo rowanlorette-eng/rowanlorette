@@ -1,6 +1,7 @@
 env: "local" #//local dev prod
 storage_path: "data.db"
 static: "./static"
+ffmpeg_profile: "nvidia" #// cpu intel nvidia h265_nvenc amd_vaapi amd_amf
 http_server:
   address: "localhost"
   port: "8087"

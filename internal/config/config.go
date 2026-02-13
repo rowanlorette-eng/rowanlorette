@@ -10,10 +10,11 @@ import (
 )
 
 type Config struct {
-	Env         string     `yaml:"env"`
-	StoragePath string     `yaml:"storage_path"`
-	Static      string     `yaml:"static"`
-	HTTPServer  HTTPServer `yaml:"http_server"`
+	Env           string     `yaml:"env"`
+	StoragePath   string     `yaml:"storage_path"`
+	Static        string     `yaml:"static"`
+	FFmpegProfile string     `yaml:"ffmpeg_profile"`
+	HTTPServer    HTTPServer `yaml:"http_server"`
 }
 
 type HTTPServer struct {
@@ -43,4 +44,17 @@ func MustLoad() *Config {
 		log.Fatalf("can not parse yaml: %v", err)
 	}
 	return &cfg
+}
+
+var CFG *Config
+
+func init() {
+	CFG = MustLoad()
+	// защита от некорректного значения
+	switch CFG.FFmpegProfile {
+	case "cpu", "intel", "nvidia", "h265_nvenc", "amd_vaapi", "amd_amf":
+		// всё ок
+	default:
+		CFG.FFmpegProfile = "cpu"
+	}
 }

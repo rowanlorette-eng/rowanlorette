@@ -10,10 +10,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"umbrella/internal/config"
 	"umbrella/internal/storage/sqlite"
 
 	"github.com/google/uuid"
 )
+
+var MODE = config.CFG.FFmpegProfile
 
 type VideoResponse struct {
 	ID        string `json:"id"`
@@ -22,6 +25,44 @@ type VideoResponse struct {
 	StreamURL string `json:"stream_url"`
 	Thumbnail string `json:"thumbnail"`
 	Progress  int    `json:"progress"`
+}
+
+var ffmpegVideoArgs = map[string][]string{
+	// === CPU ===
+	"cpu": {
+		"-c:v", "libx264",
+		"-preset", "veryfast",
+	},
+
+	// === Intel iGPU (QSV) ===
+	// HW-декодер убран, остаются только кодек и output options
+	"intel": {
+		"-c:v", "h264_qsv",
+	},
+
+	// === NVIDIA GPU (NVENC) ===
+	"nvidia": {
+		"-c:v", "h264_nvenc",
+		"-preset", "p4",
+		"-tune", "hq",
+	},
+
+	// === NVIDIA H.265 / HEVC кодирование через NVENC ===
+	"h265_nvenc": {
+		"-c:v", "hevc_nvenc",
+		"-preset", "p4",
+		"-tune", "hq",
+	},
+
+	// === AMD GPU (Linux VAAPI) ===
+	"amd_vaapi": {
+		"-c:v", "h264_vaapi",
+	},
+
+	// === AMD GPU (Windows AMF) ===
+	"amd_amf": {
+		"-c:v", "h264_amf",
+	},
 }
 
 func ListVideos(storage *sqlite.Storage) http.HandlerFunc {
@@ -172,26 +213,65 @@ func PublishHandler(storage *sqlite.Storage) http.HandlerFunc {
 }
 
 func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error {
-	// 1) HLS
-	cmd := exec.Command("ffmpeg",
-		"-y",
-		"-i", input,
-		"-c:v", "libx264",
-		"-c:a", "aac",
-		"-preset", "veryfast",
-		"-hls_time", "4",
-		"-hls_playlist_type", "vod",
-		"-hls_segment_filename", filepath.Join(dir, "seg%03d.ts"),
-		filepath.Join(dir, "index.m3u8"),
-	)
+	// --- вспомогательная функция для сборки аргументов FFmpeg ---
+	buildArgs := func(mode string) []string {
+		args := []string{"-y"}
 
-	out, err := cmd.CombinedOutput()
+		// --- HW-ускорение декодера (только для Intel и AMD VAAPI) ---
+		switch mode {
+		case "intel":
+			args = append(args, "-hwaccel", "qsv")
+		case "amd_vaapi":
+			args = append(args, "-hwaccel", "vaapi", "-hwaccel_device", "/dev/dri/renderD128")
+		}
+
+		// --- входной файл ---
+		args = append(args, "-i", input)
+
+		// --- кодек и GPU/CPU опции из ffmpegVideoArgs ---
+		if opts, ok := ffmpegVideoArgs[mode]; ok {
+			args = append(args, opts...)
+		} else {
+			args = append(args, ffmpegVideoArgs["cpu"]...)
+		}
+
+		// --- аудио и HLS ---
+		args = append(args,
+			"-c:a", "aac",
+			"-hls_time", "4",
+			"-hls_playlist_type", "vod",
+			"-hls_segment_filename", filepath.Join(dir, "seg%03d.ts"),
+			filepath.Join(dir, "index.m3u8"),
+		)
+
+		return args
+	}
+
+	// --- запуск FFmpeg и возврат вывода ---
+	runFFmpeg := func(args []string) ([]byte, error) {
+		cmd := exec.Command("ffmpeg", args...)
+		return cmd.CombinedOutput()
+	}
+
+	// --- 1️⃣ Основной HLS транскодинг ---
+	out, err := runFFmpeg(buildArgs(MODE))
+	if err != nil {
+		logLower := strings.ToLower(string(out))
+		// --- fallback на CPU, если GPU недоступен ---
+		if strings.Contains(logLower, "nvenc") ||
+			strings.Contains(logLower, "no capable devices") ||
+			strings.Contains(logLower, "driver") ||
+			strings.Contains(logLower, "qsv") {
+			fmt.Println("GPU unavailable → fallback to CPU")
+			out, err = runFFmpeg(buildArgs("cpu"))
+		}
+	}
 	if err != nil {
 		storage.SetVideoError(id)
 		return fmt.Errorf("ffmpeg HLS failed: %w\n%s", err, string(out))
 	}
 
-	// 2) Thumbnail
+	// --- 2️⃣ Thumbnail ---
 	thumbPath := filepath.Join(dir, "thumb.jpg")
 	thumbCmd := exec.Command("ffmpeg",
 		"-y",
@@ -201,18 +281,12 @@ func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error 
 		"-q:v", "2",
 		thumbPath,
 	)
-
 	if out, err := thumbCmd.CombinedOutput(); err != nil {
 		storage.SetVideoError(id)
-		return fmt.Errorf("ffmpeg thumb failed: %w\n%s", err, string(out))
+		return fmt.Errorf("thumbnail failed: %w\n%s", err, string(out))
 	}
 
-	if _, err := os.Stat(thumbPath); err != nil {
-		storage.SetVideoError(id)
-		return fmt.Errorf("thumbnail not created: %w", err)
-	}
-
-	// 3) Audio (не критично)
+	// --- 3️⃣ Audio extract ---
 	audioCmd := exec.Command("ffmpeg",
 		"-y",
 		"-i", input,
@@ -220,17 +294,17 @@ func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error 
 		"-map", "a",
 		filepath.Join(dir, "audio.mp3"),
 	)
-	audioCmd.CombinedOutput() // ошибки логируем, но не падаем
+	audioCmd.Run() // ошибки не критичны
 
-	// 4) Удаляем исходник
+	// --- 4️⃣ Удаляем исходник ---
 	_ = os.Remove(input)
 
-	// 5) READY
+	// --- 5️⃣ Обновляем статус в БД ---
 	if err := storage.SetVideoReadyWithThumbnail(
 		id,
 		"/api/stream/"+id+"/thumb.jpg",
 	); err != nil {
-		return fmt.Errorf("SetVideoReadyWithThumbnail failed: %w", err)
+		return err
 	}
 
 	return nil
