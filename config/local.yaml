@@ -3,5 +3,5 @@ storage_path: "data.db"
 static: "./static"
 http_server:
   address: "localhost"
-  port: "8080"
+  port: "8087"
   timeout: 4s

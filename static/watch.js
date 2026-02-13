@@ -38,6 +38,7 @@ const audioSettingsBtn = document.getElementById("audioSettingsBtn");
 
 const topSpacer = document.getElementById("top-spacer");
 let removedHeight = 0;
+let mobileFullscreen = false;
 
 let hlsInstance = null;
 let lastVolume = 1;
@@ -45,6 +46,10 @@ const AUTO_HIDE_MS = 3000;
 let hideTimer = null;
 
 const nextVideoBtn = document.getElementById("nextVideoBtn");
+// Определяем, широкое видео или вертикальное
+function isLandscapeVideo() {
+  return player.videoWidth > player.videoHeight;
+}
 
 async function playNextVideo() {
   try {
@@ -94,7 +99,6 @@ const autoplayIcon = document.getElementById("autoplayIcon");
 
 // читаем из localStorage (default = false)
 let autoplayEnabled = localStorage.getItem("autoplayEnabled") === "1";
-
 // обновляем иконку при загрузке страницы
 function updateAutoplayIcon() {
   autoplayIcon.src = autoplayEnabled
@@ -102,6 +106,32 @@ function updateAutoplayIcon() {
     : "/icons/toggleoff.png";
 }
 updateAutoplayIcon();
+// Повтор
+const repeatBtn = document.getElementById("repeatBtn");
+const repeatIcon = document.getElementById("repeatIcon");
+
+let repeatEnabled = localStorage.getItem("repeatEnabled") === "1";
+function updateRepeatIcon() {
+  repeatIcon.src = repeatEnabled
+    ? "/icons/repeaton.png"
+    : "/icons/repeatoff.png";
+}
+updateRepeatIcon();
+
+repeatBtn.onclick = (e) => {
+  e.stopPropagation();
+
+  repeatEnabled = !repeatEnabled;
+  localStorage.setItem("repeatEnabled", repeatEnabled ? "1" : "0");
+  updateRepeatIcon();
+
+  // если включаем повтор — выключаем автовоспроизведение
+  if (repeatEnabled) {
+    autoplayEnabled = false;
+    localStorage.setItem("autoplayEnabled", "0");
+    updateAutoplayIcon();
+  }
+};
 
 // переключение состояния по клику
 autoplayBtn.onclick = (e) => {
@@ -109,6 +139,13 @@ autoplayBtn.onclick = (e) => {
   autoplayEnabled = !autoplayEnabled;
   localStorage.setItem("autoplayEnabled", autoplayEnabled ? "1" : "0");
   updateAutoplayIcon();
+
+  // если включаем автовоспроизведение — выключаем повтор
+  if (autoplayEnabled) {
+    repeatEnabled = false;
+    localStorage.setItem("repeatEnabled", "0");
+    updateRepeatIcon();
+  }
 };
 
 function shuffle(array) {
@@ -260,6 +297,57 @@ window.addEventListener("scroll", () => {
 
   if (nearBottom) loadVideoList();
 });
+
+// Функция перехода в fullscreen и поворот mobile
+// Вход в fullscreen
+function enterFullscreenMobile() {
+  if (!mobileFullscreen) {
+    mobileFullscreen = true;
+
+    if (videoWrapper.requestFullscreen) videoWrapper.requestFullscreen();
+    else if (videoWrapper.webkitRequestFullscreen)
+      videoWrapper.webkitRequestFullscreen();
+
+    updateMobileFullscreenLayout();
+  }
+}
+
+// Выход из fullscreen
+function exitFullscreenMobile() {
+  if (mobileFullscreen) {
+    mobileFullscreen = false;
+
+    if (document.exitFullscreen) document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+
+    videoWrapper.classList.remove(
+      "fullscreen-landscape",
+      "fullscreen-portrait",
+    );
+    videoWrapper.style.width = "";
+    videoWrapper.style.height = "";
+    videoWrapper.style.transform = "";
+  }
+}
+
+// Обновление позиции и поворота видео в fullscreen
+function updateMobileFullscreenLayout() {
+  if (!mobileFullscreen) return;
+
+  const isLandscape = isLandscapeVideo();
+  const angle = window.orientation || screen.orientation?.angle || 0;
+  const isDeviceLandscape = Math.abs(angle) === 90;
+
+  // горизонтальное видео
+  if (isLandscape) {
+    videoWrapper.classList.add("fullscreen-landscape");
+    videoWrapper.classList.remove("fullscreen-portrait");
+  } else {
+    // вертикальное видео
+    videoWrapper.classList.add("fullscreen-portrait");
+    videoWrapper.classList.remove("fullscreen-landscape");
+  }
+}
 
 // ----------------- SETTINGS MENU -----------------
 settingsBtn.onclick = (e) => {
@@ -419,9 +507,23 @@ function updateMuteIcon() {
 
 // fullscreen
 fullscreen.onclick = () => {
-  if (!document.fullscreenElement) videoWrapper.requestFullscreen();
-  else document.exitFullscreen();
+  if (/Mobi|Android/i.test(navigator.userAgent)) {
+    if (!mobileFullscreen) enterFullscreenMobile();
+    else exitFullscreenMobile();
+  } else {
+    if (!document.fullscreenElement) videoWrapper.requestFullscreen();
+    else document.exitFullscreen();
+  }
 };
+
+// Обновление при изменении ориентации или ресайзе
+window.addEventListener("orientationchange", updateMobileFullscreenLayout);
+window.addEventListener("resize", updateMobileFullscreenLayout);
+
+// Если пользователь выходит из fullscreen через системную кнопку
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement) mobileFullscreen = false;
+});
 
 // buffer
 function updateBuffer() {
@@ -544,34 +646,34 @@ player.onended = async () => {
   overlay.style.display = "flex";
   playPauseIcon.src = "/icons/play.png";
 
+  // если повтор включен — просто начать видео заново
+  if (repeatEnabled) {
+    player.currentTime = 0;
+    player.play();
+    return;
+  }
+
+  // если автовоспроизведение выключено — ничего не делаем
   if (!autoplayEnabled) return;
 
   try {
-    // получаем список следующих видео
     const res = await fetch(`/api/videos?offset=0&limit=50`);
     let videos = await res.json();
     videos = Array.isArray(videos) ? videos : [];
 
-    // читаем список просмотренных видео (autoplay) из sessionStorage
     const watched = JSON.parse(
       sessionStorage.getItem("autoplayWatched") || "[]",
     );
-
-    // фильтруем: исключаем текущее и уже просмотренные
     videos = videos.filter(
       (v) => v.id !== id && v.status === "ready" && !watched.includes(v.id),
     );
 
-    if (videos.length === 0) return; // новых видео нет
+    if (videos.length === 0) return;
 
-    // берем первое в списке
     const nextVideo = videos[0];
-
-    // добавляем текущее видео в watched
     watched.push(id);
     sessionStorage.setItem("autoplayWatched", JSON.stringify(watched));
 
-    // ставим autoplay на следующем видео
     sessionStorage.setItem("autoplay", "1");
     location.href = `/watch?v=${nextVideo.id}`;
   } catch (e) {
