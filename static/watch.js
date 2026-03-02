@@ -36,6 +36,12 @@ const audioPlayer = document.getElementById("audioPlayer");
 const audioTitle = document.getElementById("audioTitle");
 const audioSettingsBtn = document.getElementById("audioSettingsBtn");
 
+const videoDescription = document.getElementById("videoDescription");
+const descContent = document.getElementById("descContent");
+const descToggle = document.getElementById("descToggle");
+
+let descriptionExpanded = false;
+
 const topSpacer = document.getElementById("top-spacer");
 let removedHeight = 0;
 let mobileFullscreen = false;
@@ -168,6 +174,27 @@ async function load() {
   }
 
   const video = await fetch(`/api/video/${id}`).then((r) => r.json());
+
+  if (video.description) {
+    renderDescription(video.description.trim());
+    videoDescription.style.display = "block";
+  } else {
+    videoDescription.style.display = "none";
+  }
+
+  // функция рендеринга Markdown и ссылок
+  function renderDescription(markdown) {
+    const html = marked.parse(markdown);
+    descContent.innerHTML = html;
+
+    // делаем ссылки кликабельными и синими
+    descContent.querySelectorAll("a").forEach((a) => {
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.style.color = "#4da3ff";
+      a.style.textDecoration = "underline";
+    });
+  }
 
   if (video.status === "processing") {
     statusEl.innerText = "Видео обрабатывается...";
@@ -640,6 +667,24 @@ document.addEventListener("keydown", (e) => {
 
 showControls();
 load();
+
+function toggleDescription() {
+  descriptionExpanded = !descriptionExpanded;
+
+  if (descriptionExpanded) {
+    videoDescription.classList.add("expanded");
+    descToggle.textContent = "свернуть";
+  } else {
+    videoDescription.classList.remove("expanded");
+    descToggle.textContent = "…ещё";
+  }
+}
+
+videoDescription.addEventListener("click", toggleDescription);
+descToggle.addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleDescription();
+});
 
 // ----------------- AUTOPLAY NEXT VIDEO -----------------
 player.onended = async () => {

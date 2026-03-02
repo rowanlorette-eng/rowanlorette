@@ -4,5 +4,5 @@ static: "./static"
 ffmpeg_profile: "nvidia" #// cpu intel nvidia h265_nvenc amd_vaapi amd_amf
 http_server:
   address: "localhost"
-  port: "8087"
+  port: "8089"
   timeout: 4s

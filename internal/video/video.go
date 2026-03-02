@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -19,12 +20,18 @@ import (
 var MODE = config.CFG.FFmpegProfile
 
 type VideoResponse struct {
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	Status    string `json:"status"`
-	StreamURL string `json:"stream_url"`
-	Thumbnail string `json:"thumbnail"`
-	Progress  int    `json:"progress"`
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Status      string `json:"status"`
+	StreamURL   string `json:"stream_url"`
+	Thumbnail   string `json:"thumbnail"`
+	Description string `json:"description"`
+	Progress    int    `json:"progress"`
+}
+type ffprobeOutput struct {
+	Format struct {
+		Tags map[string]string `json:"tags"`
+	} `json:"format"`
 }
 
 var ffmpegVideoArgs = map[string][]string{
@@ -161,8 +168,52 @@ func UploadHandler(storage *sqlite.Storage) http.HandlerFunc {
 			return
 		}
 
+		desc, err := GetVideoDescription(input)
+		if err != nil {
+			log.Printf("metadata read error for %s: %v", id, err)
+		} else if desc != "" {
+			if err := storage.SetVideoDescription(id, desc); err != nil {
+				log.Printf("cannot save description for %s: %v", id, err)
+			}
+		}
+
 		w.Write([]byte(id))
 	}
+}
+
+func GetVideoDescription(path string) (string, error) {
+	cmd := exec.Command(
+		"ffprobe",
+		"-v", "quiet",
+		"-print_format", "json",
+		"-show_format",
+		path,
+	)
+
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	var data ffprobeOutput
+	if err := json.Unmarshal(out, &data); err != nil {
+		return "", err
+	}
+
+	tags := data.Format.Tags
+
+	// популярные варианты хранения описания
+	if v, ok := tags["description"]; ok {
+		return v, nil
+	}
+	if v, ok := tags["comment"]; ok {
+		return v, nil
+	}
+	if v, ok := tags["synopsis"]; ok {
+		return v, nil
+	}
+
+	return "", nil
 }
 
 // Вспомогательная функция для JSON ошибок
@@ -326,13 +377,20 @@ func GetVideoHandler(storage *sqlite.Storage) http.HandlerFunc {
 			return
 		}
 
+		// Обрабатываем null/пустое описание
+		desc := v.Description
+		if desc == "" {
+			desc = "" // можно поставить "Нет описания", если хотите
+		}
+
 		resp := VideoResponse{
-			ID:        v.ID,
-			Title:     v.Title,
-			Status:    v.Status,
-			Thumbnail: v.Thumbnail,
-			Progress:  v.Progress,
-			StreamURL: "/api/stream/" + v.ID,
+			ID:          v.ID,
+			Title:       v.Title,
+			Status:      v.Status,
+			Thumbnail:   v.Thumbnail,
+			Description: desc,
+			Progress:    v.Progress,
+			StreamURL:   "/api/stream/" + v.ID,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

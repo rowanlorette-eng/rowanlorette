@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 
 	_ "modernc.org/sqlite"
@@ -12,11 +13,12 @@ type Storage struct {
 }
 
 type Video struct {
-	ID        string
-	Title     string
-	Status    string
-	Thumbnail string
-	Progress  int
+	ID          string
+	Title       string
+	Status      string
+	Thumbnail   string
+	Description string
+	Progress    int
 }
 
 // Инициализация базы
@@ -35,6 +37,7 @@ func Init(storagePath string) (*Storage, error) {
 		title TEXT,
 		status TEXT,
 		thumbnail TEXT,
+		description TEXT,
 		progress INTEGER DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`); err != nil {
@@ -72,19 +75,26 @@ func (s *Storage) ListVideos(limit, offset int) ([]Video, error) {
 
 // Возвращает одно видео по ID
 func (s *Storage) GetVideo(id string) (*Video, error) {
+	var desc sql.NullString
 	row := s.DB.QueryRow(`
-		SELECT title, status, thumbnail, progress
+		SELECT title, status, thumbnail, description, progress
 		FROM videos
 		WHERE id = ?
 	`, id)
 
 	var v Video
 	v.ID = id
-	if err := row.Scan(&v.Title, &v.Status, &v.Thumbnail, &v.Progress); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil // видео не найдено
+	if err := row.Scan(&v.Title, &v.Status, &v.Thumbnail, &desc, &v.Progress); err != nil {
+		if errors.Is(err, sql.ErrNoRows) { // ← вот так правильно
+			return nil, nil
 		}
 		return nil, fmt.Errorf("GetVideo scan failed: %w", err)
+	}
+
+	if desc.Valid {
+		v.Description = desc.String
+	} else {
+		v.Description = ""
 	}
 
 	return &v, nil
@@ -141,6 +151,22 @@ func (s *Storage) SetVideoError(id string) error {
 	if err != nil {
 		return fmt.Errorf("SetVideoError failed: %w", err)
 	}
+	return nil
+}
+
+func (s *Storage) SetVideoDescription(id, description string) error {
+	res, err := s.DB.Exec(`UPDATE videos SET description=? WHERE id=?`, description, id)
+	if err != nil {
+		return fmt.Errorf("SetVideoDescription failed: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("video not found: id=%s", id)
+	}
+
 	return nil
 }
 
