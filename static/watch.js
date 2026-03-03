@@ -289,7 +289,10 @@ async function loadVideoList(reset = false) {
           </div>
         </div>
       `;
-      item.onclick = () => (location.href = `watch?v=${v.id}`);
+      item.onclick = () => {
+        sessionStorage.setItem("autoplay", "1");
+        location.href = `watch?v=${v.id}`;
+      };
       list.appendChild(item);
     });
 
