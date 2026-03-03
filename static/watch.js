@@ -175,6 +175,11 @@ async function load() {
 
   const video = await fetch(`/api/video/${id}`).then((r) => r.json());
 
+  descriptionExpanded = false;
+  videoDescription.classList.remove("expanded");
+  descToggle.textContent = "…ещё";
+  videoDescription.addEventListener("click", toggleDescription);
+
   if (video.description) {
     renderDescription(video.description.trim());
     videoDescription.style.display = "block";
@@ -674,13 +679,18 @@ function toggleDescription() {
   if (descriptionExpanded) {
     videoDescription.classList.add("expanded");
     descToggle.textContent = "свернуть";
+
+    // 🔴 Убираем большую кнопку
+    videoDescription.removeEventListener("click", toggleDescription);
   } else {
     videoDescription.classList.remove("expanded");
     descToggle.textContent = "…ещё";
+
+    // 🟢 Возвращаем большую кнопку
+    videoDescription.addEventListener("click", toggleDescription);
   }
 }
 
-videoDescription.addEventListener("click", toggleDescription);
 descToggle.addEventListener("click", (e) => {
   e.stopPropagation();
   toggleDescription();

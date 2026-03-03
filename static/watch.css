@@ -502,6 +502,11 @@ video {
   display: none; /* убираем градиент при разворачивании */
 }
 
+.video-description.expanded {
+  cursor: default;
+  user-select: text;
+}
+
 /* Ссылки в описании */
 .desc-content a {
   color: #4da3ff;
@@ -545,6 +550,7 @@ video {
   .list {
     max-width: 100%;
     height: auto;
+    overflow: visible;
     margin-top: 16px;
     padding-right: 0;
   }
