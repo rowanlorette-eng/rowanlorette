@@ -335,13 +335,25 @@ window.addEventListener("scroll", () => {
 
 // Функция перехода в fullscreen и поворот mobile
 // Вход в fullscreen
-function enterFullscreenMobile() {
+async function enterFullscreenMobile() {
   if (!mobileFullscreen) {
     mobileFullscreen = true;
 
-    if (videoWrapper.requestFullscreen) videoWrapper.requestFullscreen();
-    else if (videoWrapper.webkitRequestFullscreen)
-      videoWrapper.webkitRequestFullscreen();
+    try {
+      if (videoWrapper.requestFullscreen)
+        await videoWrapper.requestFullscreen();
+      else if (videoWrapper.webkitRequestFullscreen)
+        await videoWrapper.webkitRequestFullscreen();
+
+      // если видео горизонтальное — повернуть экран
+      if (player.videoWidth > player.videoHeight) {
+        if (screen.orientation && screen.orientation.lock) {
+          await screen.orientation.lock("landscape");
+        }
+      }
+    } catch (err) {
+      console.log("Fullscreen error:", err);
+    }
 
     updateMobileFullscreenLayout();
   }
@@ -354,6 +366,10 @@ function exitFullscreenMobile() {
 
     if (document.exitFullscreen) document.exitFullscreen();
     else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+
+    if (screen.orientation && screen.orientation.unlock) {
+      screen.orientation.unlock();
+    }
 
     videoWrapper.classList.remove(
       "fullscreen-landscape",

@@ -81,18 +81,6 @@ nav {
   transform-origin: center center;
 }
 
-.video-wrapper.fullscreen-landscape {
-  width: 100vh; /* высота экрана = ширина видео */
-  height: 100vw; /* ширина экрана = высота видео */
-  transform: rotate(90deg);
-}
-
-.video-wrapper.fullscreen-portrait {
-  width: 100%;
-  height: 100%;
-  transform: none;
-}
-
 video {
   width: 100%;
   height: 100%;
@@ -333,9 +321,15 @@ video {
   flex-shrink: 0;
 }
 
+.itemText {
+  min-width: 0;
+}
+
 .itemTitle {
   font-size: 14px;
   font-weight: bold;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .itemStatus {
@@ -534,6 +528,17 @@ video {
   scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
   overflow-y: auto;
   max-height: 100vh;
+}
+
+@media (max-width: 1200px) {
+  .item {
+    flex-direction: column;
+  }
+
+  .thumb {
+    max-width: none;
+    width: 100%;
+  }
 }
 
 /* MOBILE */
