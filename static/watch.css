@@ -65,6 +65,17 @@ nav {
   flex: 3;
 }
 
+#player {
+  transform-origin: center center; /* критично для pinch */
+  transition: transform 0.1s ease-out; /* плавность масштабирования */
+}
+
+#videoWrapper {
+  touch-action: none; /* отключаем стандартные жесты браузера только для видео */
+  transform-origin: center center;
+  transition: transform 0.1s ease-out;
+}
+
 .video-wrapper {
   position: relative;
   width: 100%;
@@ -73,7 +84,6 @@ nav {
   border-radius: 12px;
   overflow: hidden;
 
-  /* для плавного fullscreen-поворота */
   transition:
     transform 0.3s ease,
     width 0.3s ease,
@@ -499,6 +509,21 @@ video {
 .video-description.expanded {
   cursor: default;
   user-select: text;
+}
+
+#videoWrapper {
+  position: relative;
+  z-index: 2; /* видео выше свернутого описания */
+}
+
+.video-description {
+  position: relative;
+  z-index: 1; /* по умолчанию под видео */
+  transition: z-index 0.2s;
+}
+
+.video-description.expanded {
+  z-index: 10; /* раскрытое описание поверх видео */
 }
 
 /* Ссылки в описании */

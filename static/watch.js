@@ -633,32 +633,6 @@ document.querySelectorAll(".audio-player").forEach((player) => {
   });
 });
 
-// === Double tap seek (mobile like YouTube) ===
-let lastTapTime = 0;
-
-videoWrapper.addEventListener("touchend", (e) => {
-  const now = Date.now();
-  const touch = e.changedTouches[0];
-  const rect = videoWrapper.getBoundingClientRect();
-  const x = touch.clientX - rect.left;
-
-  if (now - lastTapTime < 300) {
-    if (x < rect.width / 2) {
-      player.currentTime = Math.max(0, player.currentTime - 10);
-    } else {
-      player.currentTime = Math.min(
-        player.duration || 0,
-        player.currentTime + 10,
-      );
-    }
-    showControls();
-    lastTapTime = 0;
-    return;
-  }
-
-  lastTapTime = now;
-});
-
 // ----------------- INIT -----------------
 videoWrapper.addEventListener("mousemove", showControls);
 videoWrapper.addEventListener("click", showControls);
@@ -689,6 +663,77 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// ----------------- MOBILE GESTURES: DOUBLE-TAP + PINCH -----------------
+let lastTapTime = 0;
+let pinchStartDist = null;
+let pinchStartScale = 1;
+let currentScale = 1;
+
+videoWrapper.addEventListener("touchstart", (e) => {
+  if (e.touches.length === 2) {
+    // Начало pinch
+    e.preventDefault();
+    const dx = e.touches[0].pageX - e.touches[1].pageX;
+    const dy = e.touches[0].pageY - e.touches[1].pageY;
+    pinchStartDist = Math.hypot(dx, dy);
+    pinchStartScale = currentScale;
+  }
+});
+
+videoWrapper.addEventListener("touchmove", (e) => {
+  if (e.touches.length === 2 && pinchStartDist) {
+    // Pinch in progress
+    e.preventDefault();
+    const dx = e.touches[0].pageX - e.touches[1].pageX;
+    const dy = e.touches[0].pageY - e.touches[1].pageY;
+    const newDist = Math.hypot(dx, dy);
+    let scale = pinchStartScale * (newDist / pinchStartDist);
+
+    // Ограничение масштаба
+    scale = Math.max(1, Math.min(3, scale));
+    currentScale = scale;
+
+    // Выбираем элемент для масштабирования
+    let targetWrapper = videoWrapper; // обычный режим
+    if (mobileFullscreen) {
+      targetWrapper = player; // fullscreen: масштабируем сам <video>
+    }
+    targetWrapper.style.transform = `scale(${scale})`;
+  }
+});
+
+videoWrapper.addEventListener("touchend", (e) => {
+  // Сброс pinch
+  if (e.touches.length < 2) {
+    pinchStartDist = null;
+  }
+
+  // Double-tap только если один палец
+  if (e.touches.length === 0) {
+    const now = Date.now();
+    const touch = e.changedTouches[0];
+    const rect = videoWrapper.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+
+    if (now - lastTapTime < 300) {
+      // Двойной тап срабатывает
+      if (x < rect.width / 2) {
+        player.currentTime = Math.max(0, player.currentTime - 10);
+      } else {
+        player.currentTime = Math.min(
+          player.duration || 0,
+          player.currentTime + 10,
+        );
+      }
+      showControls();
+      lastTapTime = 0;
+      return;
+    }
+
+    lastTapTime = now;
+  }
+});
+
 showControls();
 load();
 
@@ -699,13 +744,21 @@ function toggleDescription() {
     videoDescription.classList.add("expanded");
     descToggle.textContent = "свернуть";
 
+    // Раскрытое описание поверх видео
+    videoDescription.style.zIndex = "10";
+
     // 🔴 Убираем большую кнопку
+    // отключаем клик на весь блок
     videoDescription.removeEventListener("click", toggleDescription);
   } else {
     videoDescription.classList.remove("expanded");
     descToggle.textContent = "…ещё";
 
+    // Свернутое описание под видео
+    videoDescription.style.zIndex = "1";
+
     // 🟢 Возвращаем большую кнопку
+    // возвращаем клик
     videoDescription.addEventListener("click", toggleDescription);
   }
 }
