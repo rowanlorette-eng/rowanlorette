@@ -42,6 +42,98 @@ nav {
   opacity: 1;
 }
 
+/* Контейнер с камерой */
+#webcam-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+/* Увеличиваем размер видео */
+#webcam-container canvas {
+  width: 480px; /* ширина камеры */
+  height: 480px; /* высота камеры */
+  border-radius: 12px;
+  border: 2px solid #4caf50;
+}
+
+/* Контейнер с классами и вероятностями */
+#label-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 15px;
+  font-size: 18px;
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 10px 20px;
+  border-radius: 8px;
+}
+
+.webcam-placeholder {
+  width: 480px;
+  height: 480px;
+  border-radius: 12px;
+  background: #1a1f3a;
+  border: 2px dashed #4da3ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4da3ff;
+  font-size: 18px;
+  opacity: 0.8;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.app h2 {
+  margin-bottom: 20px;
+  font-size: 28px;
+}
+
+.buttons {
+  margin: 20px;
+}
+
+.btn {
+  border: none;
+  padding: 12px 28px;
+  font-size: 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  margin: 10px;
+  transition: 0.25s;
+  font-weight: 600;
+}
+
+.start {
+  background: #22c55e;
+  color: white;
+}
+
+.start:hover {
+  background: #16a34a;
+  transform: scale(1.05);
+}
+
+.stop {
+  background: #ef4444;
+  color: white;
+}
+
+.stop:hover {
+  background: #dc2626;
+  transform: scale(1.05);
+}
+
 .hero {
   padding: 80px 40px;
   text-align: center;
@@ -197,4 +289,3 @@ footer {
   width: 100%;
   accent-color: #4da3ff;
 }
-

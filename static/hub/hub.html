@@ -111,9 +111,24 @@
         </iframe>
       </div>
     </section>
+
+    <div class="app">
+      <h2>Teachable Machine Image Model</h2>
+
+      <div class="buttons">
+        <button class="btn start" onclick="init()">Start</button>
+        <button class="btn stop" onclick="stopWebcam()">Stop</button>
+      </div>
+
+      <div id="webcam-container"></div>
+      <div id="label-container"></div>
+    </div>
+
     <footer>© 2026 buy APIs. All rights reserved. Prices in USD ($).</footer>
 
     <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
     <script src="hub.js"></script>
   </body>
 </html>
