@@ -12,6 +12,7 @@ let listEnded = false;
 const shouldAutoplay = sessionStorage.getItem("autoplay") === "1";
 sessionStorage.removeItem("autoplay");
 
+const titleEl = document.getElementById("title");
 const player = document.getElementById("player");
 const playPause = document.getElementById("playPause");
 const seek = document.getElementById("seek");
@@ -174,6 +175,8 @@ async function load() {
   }
 
   const video = await fetch(`/api/video/${id}`).then((r) => r.json());
+  titleEl.innerText = video.title || "";
+  document.title = video.title + " - Umbrella Play";
 
   descriptionExpanded = false;
   videoDescription.classList.remove("expanded");
