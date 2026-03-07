@@ -512,12 +512,21 @@ bigPlay.onclick = () => {
 player.ontimeupdate = () => {
   const current = player.currentTime;
   const duration = player.duration || 0;
+
   seek.value = duration ? (current / duration) * 100 : 0;
+
   const fmt = (t) => {
-    const m = Math.floor(t / 60);
+    const h = Math.floor(t / 3600);
+    const m = Math.floor((t % 3600) / 60);
     const s = Math.floor(t % 60);
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+
+    if (h > 0) {
+      return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    }
+
+    return `${m}:${s.toString().padStart(2, "0")}`;
   };
+
   time.innerText = `${fmt(current)} / ${fmt(duration)}`;
 };
 
