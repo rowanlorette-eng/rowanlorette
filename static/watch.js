@@ -48,7 +48,8 @@ let removedHeight = 0;
 let mobileFullscreen = false;
 
 let hlsInstance = null;
-let lastVolume = 1;
+let savedVolume = localStorage.getItem("playerVolume");
+let lastVolume = savedVolume !== null ? Number(savedVolume) : 1;
 const AUTO_HIDE_MS = 3000;
 let hideTimer = null;
 
@@ -543,20 +544,23 @@ volume.oninput = () => {
   player.muted = v === 0;
   if (v > 0) lastVolume = v;
 
+  localStorage.setItem("playerVolume", v);
+
   updateMuteIcon();
 };
 
 muteBtn.onclick = () => {
   if (player.muted || player.volume === 0) {
     player.muted = false;
-    player.volume = 1;
-    volume.value = 1;
+    player.volume = lastVolume || 1;
+    volume.value = player.volume;
   } else {
     player.muted = true;
     player.volume = 0;
     volume.value = 0;
   }
 
+  localStorage.setItem("playerVolume", player.volume);
   updateMuteIcon();
 };
 
@@ -748,6 +752,12 @@ videoWrapper.addEventListener("touchend", (e) => {
 
 showControls();
 load();
+
+// применяем сохраненную громкость
+player.volume = lastVolume;
+volume.value = lastVolume;
+player.muted = lastVolume === 0;
+updateMuteIcon();
 
 function toggleDescription() {
   descriptionExpanded = !descriptionExpanded;
