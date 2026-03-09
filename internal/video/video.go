@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"os/exec"
@@ -18,6 +19,11 @@ import (
 )
 
 var MODE = config.CFG.FFmpegProfile
+
+func init() {
+	mime.AddExtensionType(".m3u8", "application/vnd.apple.mpegurl")
+	mime.AddExtensionType(".ts", "video/mp2t")
+}
 
 type VideoResponse struct {
 	ID          string `json:"id"`
@@ -446,4 +452,193 @@ func Stream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.ServeFile(w, r, full)
+}
+
+func UploadStartHandler(storage *sqlite.Storage) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		id := uuid.New().String()
+
+		dir := filepath.Join("videos", id, "chunks")
+
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			http.Error(w, "cannot create upload dir", http.StatusInternalServerError)
+			return
+		}
+
+		err := storage.CreateVideo(id, "", "uploading", 0)
+		if err != nil {
+			http.Error(w, "cannot create video record", http.StatusInternalServerError)
+			return
+		}
+
+		resp := map[string]string{
+			"id": id,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}
+}
+
+func UploadChunkHandler() http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		id := r.FormValue("id")
+		indexStr := r.FormValue("index")
+
+		if id == "" || indexStr == "" {
+			http.Error(w, "missing params", 400)
+			return
+		}
+
+		index, err := strconv.Atoi(indexStr)
+		if err != nil || index < 0 {
+			http.Error(w, "invalid chunk index", 400)
+			return
+		}
+
+		file, _, err := r.FormFile("chunk")
+		if err != nil {
+			http.Error(w, "chunk missing", 400)
+			return
+		}
+		defer file.Close()
+
+		dir := filepath.Join("videos", id, "chunks")
+
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			http.Error(w, "cannot create dir", 500)
+			return
+		}
+
+		partPath := filepath.Join(dir, fmt.Sprintf("%d.part", index))
+
+		if _, err := os.Stat(partPath); err == nil {
+			w.Write([]byte("ok"))
+			return
+		}
+		out, err := os.Create(partPath)
+
+		if err != nil {
+			http.Error(w, "cannot create chunk", 500)
+			return
+		}
+		defer out.Close()
+
+		if _, err := io.Copy(out, file); err != nil {
+			http.Error(w, "cannot save chunk", 500)
+			return
+		}
+
+		w.Write([]byte("ok"))
+	}
+}
+
+func UploadFinishHandler(storage *sqlite.Storage) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req struct {
+			ID          string `json:"id"`
+			Filename    string `json:"filename"`
+			TotalChunks int    `json:"total_chunks"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "bad request", 400)
+			return
+		}
+		if req.TotalChunks <= 0 {
+			http.Error(w, "invalid chunk count", 400)
+			return
+		}
+
+		dir := filepath.Join("videos", req.ID)
+		chunks := filepath.Join(dir, "chunks")
+
+		input := filepath.Join(dir, "input.mp4")
+		tmp := filepath.Join(dir, "input.tmp")
+
+		out, err := os.Create(tmp)
+		if err != nil {
+			http.Error(w, "cannot create file tmp", 500)
+			return
+		}
+
+		buf := make([]byte, 1024*1024)
+		for i := 0; i < req.TotalChunks; i++ {
+			part := filepath.Join(chunks, fmt.Sprintf("%d.part", i))
+
+			if _, err := os.Stat(part); err != nil {
+				out.Close()
+				os.Remove(tmp)
+				http.Error(w, "missing chunk "+strconv.Itoa(i), 400)
+				return
+			}
+
+			in, err := os.Open(part)
+			if err != nil {
+				out.Close()
+				os.Remove(tmp)
+				http.Error(w, "cannot open chunk", 500)
+				return
+			}
+			
+			_, err = io.CopyBuffer(out, in, buf)
+
+			in.Close()
+
+			if err != nil {
+				out.Close()
+				os.Remove(tmp)
+				http.Error(w, "merge failed", 500)
+				return
+			}
+		}
+
+		out.Close()
+
+		if err := os.Rename(tmp, input); err != nil {
+			os.Remove(tmp)
+			http.Error(w, "finalize failed", 500)
+			return
+		}
+
+		os.RemoveAll(chunks)
+
+		// создаём запись в БД
+		if err := storage.SetVideoUploaded(req.ID, req.Filename); err != nil {
+			http.Error(w, "db error", 500)
+			return
+		}
+
+		go func() {
+
+			desc, err := GetVideoDescription(input)
+
+			if err == nil && desc != "" {
+				storage.SetVideoDescription(req.ID, desc)
+			}
+
+		}()
+
+		w.Write([]byte("ok"))
+	}
 }

@@ -35,8 +35,11 @@ func Register(mux *http.ServeMux, storage *sqlite.Storage) {
 
 	mux.HandleFunc("/api/videos", video.ListVideos(storage))
 	mux.HandleFunc("/api/random", video.RandomVideoHandler(storage))
-	mux.HandleFunc("/api/upload", video.UploadHandler(storage))
+	//mux.HandleFunc("/api/upload", video.UploadHandler(storage))
 	mux.HandleFunc("/api/publish", video.PublishHandler(storage))
+	mux.Handle("/api/upload/start", video.UploadStartHandler(storage))
+	mux.Handle("/api/upload/chunk", video.UploadChunkHandler())
+	mux.Handle("/api/upload/finish", video.UploadFinishHandler(storage))
 	mux.HandleFunc("/api/video/", video.GetVideoHandler(storage))
 	mux.HandleFunc("/api/stream/", video.Stream)
 }

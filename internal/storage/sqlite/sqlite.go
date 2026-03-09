@@ -182,3 +182,17 @@ func (s *Storage) SetVideoReadyWithThumbnail(id, thumbPath string) error {
 	}
 	return nil
 }
+
+func (s *Storage) SetVideoUploaded(id, filename string) error {
+	_, err := s.DB.Exec(`
+		UPDATE videos
+		SET title = ?, status = 'uploaded'
+		WHERE id = ?
+	`, filename, id)
+
+	if err != nil {
+		return fmt.Errorf("SetVideoUploaded failed: %w", err)
+	}
+
+	return nil
+}

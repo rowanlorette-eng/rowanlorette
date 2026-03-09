@@ -82,60 +82,84 @@ btn.onclick = async () => {
 
   currentFile = f;
 
-  const d = new FormData();
-  d.append("video", f);
-
-  // кнопка исчезает
   btn.classList.add("hide");
-
-  status.innerText = "Загрузка видео...";
+  status.innerText = "Подготовка загрузки...";
   bar.style.width = "0%";
 
-  const xhr = new XMLHttpRequest();
-  xhr.open("POST", "/api/upload");
+  // 1️⃣ создаём upload session
+  const start = await fetch("/api/upload/start", {
+    method: "POST",
+  });
 
-  xhr.upload.onprogress = (e) => {
-    if (e.lengthComputable) {
-      const pct = Math.round((e.loaded / e.total) * 100);
-      status.innerText = `Загрузка: ${pct}%`;
-      bar.style.width = pct + "%";
-    }
-  };
+  const data = await start.json();
+  const id = data.id;
 
-  xhr.onload = async () => {
-    const id = xhr.responseText;
-    currentId = id;
+  currentId = id;
 
-    status.innerText = "Видео загружено. Выберите настройки превью и название.";
-    bar.style.width = "100%";
+  const CHUNK = 8 * 1024 * 1024; // 8MB
+  const totalChunks = Math.ceil(f.size / CHUNK);
 
-    // показать форму meta
-    meta.style.display = "block";
+  let uploaded = 0;
 
-    // установить название файла
-    titleInput.value = f.name;
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK;
+    const end = Math.min(start + CHUNK, f.size);
 
-    // получить длительность видео
-    const url = URL.createObjectURL(f);
-    const video = document.createElement("video");
-    video.src = url;
+    const chunk = f.slice(start, end);
 
-    await new Promise((r) => {
-      video.onloadedmetadata = () => r();
+    const form = new FormData();
+    form.append("id", id);
+    form.append("index", i);
+    form.append("chunk", chunk);
+
+    await fetch("/api/upload/chunk", {
+      method: "POST",
+      body: form,
     });
 
-    fileDuration = video.duration;
-    durationText.innerText = formatTime(fileDuration);
+    uploaded++;
 
-    // ползунок по умолчанию в начале
-    thumbSlider.value = 0;
-    setThumbTime(0);
-    generateThumbPreview(0);
+    const pct = Math.round((uploaded / totalChunks) * 100);
 
-    URL.revokeObjectURL(url);
-  };
+    status.innerText = `Загрузка: ${pct}%`;
+    bar.style.width = pct + "%";
+  }
 
-  xhr.send(d);
+  // 3️⃣ merge chunks
+  await fetch("/api/upload/finish", {
+    method: "POST",
+    body: JSON.stringify({
+      id: id,
+      filename: f.name,
+      total_chunks: totalChunks,
+    }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  status.innerText = "Видео загружено. Выберите настройки превью.";
+  bar.style.width = "100%";
+
+  meta.style.display = "block";
+
+  titleInput.value = f.name;
+
+  const url = URL.createObjectURL(f);
+  const video = document.createElement("video");
+  video.src = url;
+
+  await new Promise((r) => (video.onloadedmetadata = r));
+
+  fileDuration = video.duration;
+
+  durationText.innerText = formatTime(fileDuration);
+
+  thumbSlider.value = 0;
+  setThumbTime(0);
+  await generateThumbPreview(0);
+
+  URL.revokeObjectURL(url);
 };
 
 saveBtn.onclick = async () => {
