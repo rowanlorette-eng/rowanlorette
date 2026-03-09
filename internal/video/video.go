@@ -397,6 +397,45 @@ func GetVideoHandler(storage *sqlite.Storage) http.HandlerFunc {
 	}
 }
 
+func DeleteVideoHandler(storage *sqlite.Storage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+
+		id := strings.TrimPrefix(r.URL.Path, "/api/delete/")
+		if id == "" {
+			writeJSONError(w, http.StatusBadRequest, "missing video id")
+			return
+		}
+
+		// удаляем запись из БД
+		err := storage.DeleteVideo(id)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "failed to delete video")
+			log.Println(err)
+			return
+		}
+
+		// путь к папке видео
+		videoDir := filepath.Join(VIDEOPATH, id)
+
+		// удаляем папку с файлами
+		err = os.RemoveAll(videoDir)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "failed to delete video files")
+			log.Println(err)
+			return
+		}
+		log.Println("video with id: ", id, " deleted, path: ", videoDir)
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 func getVideoDuration(input string) (float64, error) {
 	cmd := exec.Command(
 		"ffprobe",

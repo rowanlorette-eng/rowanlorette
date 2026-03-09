@@ -170,6 +170,22 @@ func (s *Storage) SetVideoDescription(id, description string) error {
 	return nil
 }
 
+func (s *Storage) DeleteVideo(id string) error {
+	res, err := s.DB.Exec(`DELETE FROM videos WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("video with id %s not found", id)
+	}
+
+	return nil
+}
+
 // Устанавливает статус "ready" и путь к thumbnail
 func (s *Storage) SetVideoReadyWithThumbnail(id, thumbPath string) error {
 	_, err := s.DB.Exec(`

@@ -41,6 +41,7 @@ func Register(mux *http.ServeMux, storage *sqlite.Storage) {
 	mux.Handle("/api/upload/chunk", video.UploadChunkHandler())
 	mux.Handle("/api/upload/finish", video.UploadFinishHandler(storage))
 	mux.HandleFunc("/api/video/", video.GetVideoHandler(storage))
+	mux.HandleFunc("/api/delete/", video.DeleteVideoHandler(storage))
 	mux.HandleFunc("/api/stream/", video.Stream)
 }
 
