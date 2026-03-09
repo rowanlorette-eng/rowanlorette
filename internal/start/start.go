@@ -10,7 +10,7 @@ import (
 
 func Start_server() {
 	videoDataBase := config.CFG.StoragePath
-	Static := config.CFG.Static
+	Static := config.CFG.StaticPath
 	addr := config.CFG.HTTPServer.Address
 	port := config.CFG.HTTPServer.Port
 

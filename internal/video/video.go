@@ -19,6 +19,8 @@ import (
 )
 
 var MODE = config.CFG.FFmpegProfile
+var STATICPATH = config.CFG.StaticPath
+var VIDEOPATH = config.CFG.VideosPath
 
 func init() {
 	mime.AddExtensionType(".m3u8", "application/vnd.apple.mpegurl")
@@ -149,7 +151,7 @@ func UploadHandler(storage *sqlite.Storage) http.HandlerFunc {
 
 		// Генерация ID и создание папки для видео
 		id := uuid.New().String()
-		dir := filepath.Join("videos", id)
+		dir := filepath.Join(VIDEOPATH, id)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			http.Error(w, "cannot create video directory", http.StatusInternalServerError)
 			return
@@ -242,7 +244,7 @@ func PublishHandler(storage *sqlite.Storage) http.HandlerFunc {
 			return
 		}
 
-		dir := filepath.Join("videos", id)
+		dir := filepath.Join(VIDEOPATH, id)
 		input := filepath.Join(dir, "input.mp4")
 
 		// Проверяем, что файл существует
@@ -270,7 +272,6 @@ func PublishHandler(storage *sqlite.Storage) http.HandlerFunc {
 }
 
 func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error {
-	// --- защита от выбора последнего кадра ---
 	duration, err := getVideoDuration(input)
 	if err == nil {
 		t, err2 := strconv.ParseFloat(thumbTime, 64)
@@ -284,29 +285,24 @@ func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error 
 			thumbTime = fmt.Sprintf("%.2f", t)
 		}
 	}
-	// --- вспомогательная функция для сборки аргументов FFmpeg ---
+
+	ext := strings.ToLower(filepath.Ext(input))
+	isAudio := ext == ".mp3" || ext == ".wav" || ext == ".flac"
+
 	buildArgs := func(mode string) []string {
 		args := []string{"-y"}
-
-		// --- HW-ускорение декодера (только для Intel и AMD VAAPI) ---
 		switch mode {
 		case "intel":
 			args = append(args, "-hwaccel", "qsv")
 		case "amd_vaapi":
 			args = append(args, "-hwaccel", "vaapi", "-hwaccel_device", "/dev/dri/renderD128")
 		}
-
-		// --- входной файл ---
 		args = append(args, "-i", input)
-
-		// --- кодек и GPU/CPU опции из ffmpegVideoArgs ---
 		if opts, ok := ffmpegVideoArgs[mode]; ok {
 			args = append(args, opts...)
 		} else {
 			args = append(args, ffmpegVideoArgs["cpu"]...)
 		}
-
-		// --- аудио и HLS ---
 		args = append(args,
 			"-c:a", "aac",
 			"-hls_time", "4",
@@ -314,26 +310,18 @@ func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error 
 			"-hls_segment_filename", filepath.Join(dir, "seg%03d.ts"),
 			filepath.Join(dir, "index.m3u8"),
 		)
-
 		return args
 	}
 
-	// --- запуск FFmpeg и возврат вывода ---
 	runFFmpeg := func(args []string) ([]byte, error) {
 		cmd := exec.Command("ffmpeg", args...)
 		return cmd.CombinedOutput()
 	}
 
-	// --- 1️⃣ Основной HLS транскодинг ---
 	out, err := runFFmpeg(buildArgs(MODE))
 	if err != nil {
 		logLower := strings.ToLower(string(out))
-		// --- fallback на CPU, если GPU недоступен ---
-		if strings.Contains(logLower, "nvenc") ||
-			strings.Contains(logLower, "no capable devices") ||
-			strings.Contains(logLower, "driver") ||
-			strings.Contains(logLower, "qsv") {
-			fmt.Println("GPU unavailable → fallback to CPU")
+		if strings.Contains(logLower, "nvenc") || strings.Contains(logLower, "no capable devices") || strings.Contains(logLower, "driver") {
 			out, err = runFFmpeg(buildArgs("cpu"))
 		}
 	}
@@ -342,39 +330,30 @@ func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error 
 		return fmt.Errorf("ffmpeg HLS failed: %w\n%s", err, string(out))
 	}
 
-	// --- 2️⃣ Thumbnail ---
+	// --- Thumbnail ---
 	thumbPath := filepath.Join(dir, "thumb.jpg")
-	thumbCmd := exec.Command("ffmpeg",
-		"-y",
-		"-ss", thumbTime,
-		"-i", input,
-		"-frames:v", "1",
-		"-q:v", "2",
-		thumbPath,
-	)
-	if out, err := thumbCmd.CombinedOutput(); err != nil {
-		storage.SetVideoError(id)
-		return fmt.Errorf("thumbnail failed: %w\n%s", err, string(out))
+	if isAudio {
+		cover := filepath.Join(dir, "thumb.jpg")
+		if !fileExists(cover) {
+			cover = "static/def.jpg"
+		}
+		thumbCmd := exec.Command("ffmpeg", "-y", "-i", cover, "-frames:v", "1", "-q:v", "2", thumbPath)
+		if out, err := thumbCmd.CombinedOutput(); err != nil {
+			storage.SetVideoError(id)
+			return fmt.Errorf("thumbnail (audio) failed: %w\n%s", err, string(out))
+		}
+	} else {
+		thumbCmd := exec.Command("ffmpeg", "-y", "-ss", thumbTime, "-i", input, "-frames:v", "1", "-q:v", "2", thumbPath)
+		if out, err := thumbCmd.CombinedOutput(); err != nil {
+			storage.SetVideoError(id)
+			return fmt.Errorf("thumbnail failed: %w\n%s", err, string(out))
+		}
 	}
 
-	// --- 3️⃣ Audio extract ---
-	audioCmd := exec.Command("ffmpeg",
-		"-y",
-		"-i", input,
-		"-q:a", "0",
-		"-map", "a",
-		filepath.Join(dir, "audio.mp3"),
-	)
-	audioCmd.Run() // ошибки не критичны
-
-	// --- 4️⃣ Удаляем исходник ---
+	// --- удаляем исходник ---
 	_ = os.Remove(input)
 
-	// --- 5️⃣ Обновляем статус в БД ---
-	if err := storage.SetVideoReadyWithThumbnail(
-		id,
-		"/api/stream/"+id+"/thumb.jpg",
-	); err != nil {
+	if err := storage.SetVideoReadyWithThumbnail(id, "/api/stream/"+id+"/thumb.jpg"); err != nil {
 		return err
 	}
 
@@ -444,7 +423,7 @@ func Stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	full := filepath.Join("videos", clean)
+	full := filepath.Join(VIDEOPATH, clean)
 
 	if _, err := os.Stat(full); err != nil {
 		http.NotFound(w, r)
@@ -465,7 +444,7 @@ func UploadStartHandler(storage *sqlite.Storage) http.HandlerFunc {
 
 		id := uuid.New().String()
 
-		dir := filepath.Join("videos", id, "chunks")
+		dir := filepath.Join(VIDEOPATH, id, "chunks")
 
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			http.Error(w, "cannot create upload dir", http.StatusInternalServerError)
@@ -517,7 +496,7 @@ func UploadChunkHandler() http.HandlerFunc {
 		}
 		defer file.Close()
 
-		dir := filepath.Join("videos", id, "chunks")
+		dir := filepath.Join(VIDEOPATH, id, "chunks")
 
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			http.Error(w, "cannot create dir", 500)
@@ -548,7 +527,6 @@ func UploadChunkHandler() http.HandlerFunc {
 }
 
 func UploadFinishHandler(storage *sqlite.Storage) http.HandlerFunc {
-
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -560,85 +538,173 @@ func UploadFinishHandler(storage *sqlite.Storage) http.HandlerFunc {
 			Filename    string `json:"filename"`
 			TotalChunks int    `json:"total_chunks"`
 		}
-
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "bad request", 400)
 			return
 		}
+
 		if req.TotalChunks <= 0 {
 			http.Error(w, "invalid chunk count", 400)
 			return
 		}
 
-		dir := filepath.Join("videos", req.ID)
+		dir := filepath.Join(VIDEOPATH, req.ID)
 		chunks := filepath.Join(dir, "chunks")
-
 		input := filepath.Join(dir, "input.mp4")
 		tmp := filepath.Join(dir, "input.tmp")
 
+		// --- собираем чанки ---
 		out, err := os.Create(tmp)
 		if err != nil {
-			http.Error(w, "cannot create file tmp", 500)
+			http.Error(w, "cannot create tmp file", 500)
 			return
 		}
-
 		buf := make([]byte, 1024*1024)
 		for i := 0; i < req.TotalChunks; i++ {
 			part := filepath.Join(chunks, fmt.Sprintf("%d.part", i))
-
 			if _, err := os.Stat(part); err != nil {
 				out.Close()
 				os.Remove(tmp)
 				http.Error(w, "missing chunk "+strconv.Itoa(i), 400)
 				return
 			}
-
-			in, err := os.Open(part)
-			if err != nil {
-				out.Close()
-				os.Remove(tmp)
-				http.Error(w, "cannot open chunk", 500)
-				return
-			}
-			
-			_, err = io.CopyBuffer(out, in, buf)
-
+			in, _ := os.Open(part)
+			io.CopyBuffer(out, in, buf)
 			in.Close()
-
-			if err != nil {
-				out.Close()
-				os.Remove(tmp)
-				http.Error(w, "merge failed", 500)
-				return
-			}
 		}
-
 		out.Close()
 
+		// --- перемещаем в input ---
 		if err := os.Rename(tmp, input); err != nil {
 			os.Remove(tmp)
 			http.Error(w, "finalize failed", 500)
 			return
 		}
-
 		os.RemoveAll(chunks)
 
-		// создаём запись в БД
+		// --- сохраняем запись в БД ---
 		if err := storage.SetVideoUploaded(req.ID, req.Filename); err != nil {
 			http.Error(w, "db error", 500)
 			return
 		}
 
+		// --- проверяем, аудио или видео ---
+		ext := strings.ToLower(filepath.Ext(req.Filename))
+		isAudio := ext == ".mp3" || ext == ".wav" || ext == ".flac"
+
+		if isAudio {
+			tmpVideo := filepath.Join(dir, "tmp_input.mp4")
+
+			// --- пытаемся извлечь обложку из аудио ---
+			cover := filepath.Join(dir, "cover.jpg")
+			extractCmd := exec.Command("ffmpeg", "-y", "-i", input, "-an", "-vcodec", "copy", cover)
+			if _, err := extractCmd.CombinedOutput(); err != nil || !fileExists(cover) {
+				// если извлечение не удалось, используем дефолт
+				cover = getDefaultCover()
+				if !fileExists(cover) {
+					log.Println("default cover missing:", cover)
+					storage.SetVideoError(req.ID)
+					http.Error(w, "default cover missing", 500)
+					return
+				}
+			}
+
+			// --- длительность аудио ---
+			duration, err := getAudioDuration(input)
+			if err != nil {
+				duration = 5
+			}
+
+			log.Println("Using cover:", cover)
+
+			// --- создаём видео с одним кадром ---
+			cmd := exec.Command("ffmpeg",
+				"-y",
+				"-loop", "1",
+				"-i", cover,
+				"-i", input,
+				"-c:v", "libx264",
+				"-t", fmt.Sprintf("%.2f", duration),
+				"-pix_fmt", "yuv420p",
+				"-c:a", "aac",
+				tmpVideo,
+			)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				log.Println("audio→video failed:", string(out), err)
+				storage.SetVideoError(req.ID)
+				http.Error(w, "audio→video failed", 500)
+				return
+			}
+
+			// --- заменяем оригинальный input.mp4 ---
+			os.Remove(input)
+			if err := os.Rename(tmpVideo, input); err != nil {
+				log.Println("rename tmp_input.mp4 failed:", err)
+				storage.SetVideoError(req.ID)
+				http.Error(w, "rename failed", 500)
+				return
+			}
+
+			// --- создаём thumbnail для аудио ---
+			thumbPath := filepath.Join(dir, "thumb.jpg")
+			thumbCmd := exec.Command("ffmpeg", "-y", "-i", cover, "-frames:v", "1", "-q:v", "2", thumbPath)
+			if out, err := thumbCmd.CombinedOutput(); err != nil {
+				log.Println("thumbnail failed:", string(out), err)
+				storage.SetVideoError(req.ID)
+				http.Error(w, "thumbnail failed", 500)
+				return
+			}
+
+			// --- удаляем временную cover.jpg если была создана ---
+			if cover != getDefaultCover() {
+				os.Remove(cover)
+			}
+		} else {
+			// --- thumbnail для видео ---
+			thumbPath := filepath.Join(dir, "thumb.jpg")
+			thumbCmd := exec.Command("ffmpeg", "-y", "-ss", "0", "-i", input, "-frames:v", "1", "-q:v", "2", thumbPath)
+			if out, err := thumbCmd.CombinedOutput(); err != nil {
+				log.Println("thumbnail failed:", string(out), err)
+				storage.SetVideoError(req.ID)
+				http.Error(w, "thumbnail failed", 500)
+				return
+			}
+		}
+
+		// --- обновляем описание асинхронно ---
 		go func() {
-
 			desc, err := GetVideoDescription(input)
-
 			if err == nil && desc != "" {
 				storage.SetVideoDescription(req.ID, desc)
 			}
-
 		}()
 
 		w.Write([]byte("ok"))
 	}
+}
+
+// --- вспомогательные функции ---
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func getAudioDuration(path string) (float64, error) {
+	cmd := exec.Command(
+		"ffprobe",
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		path,
+	)
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+}
+
+func getDefaultCover() string {
+	return filepath.Join(STATICPATH, "def.jpg")
 }

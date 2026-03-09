@@ -76,90 +76,115 @@ async function generateThumbPreview(time) {
 btn.onclick = async () => {
   const f = document.getElementById("f").files[0];
   if (!f) {
-    alert("Выберите видео");
+    alert("Выберите видео или аудио");
     return;
   }
-
-  currentFile = f;
 
   btn.classList.add("hide");
   status.innerText = "Подготовка загрузки...";
   bar.style.width = "0%";
 
-  // 1️⃣ создаём upload session
-  const start = await fetch("/api/upload/start", {
-    method: "POST",
-  });
+  meta.style.display = "block";
+  titleInput.value = f.name;
 
+  currentFile = f;
+
+  const ext = f.name.split(".").pop().toLowerCase();
+  const isAudio = ["mp3", "wav", "flac"].includes(ext);
+
+  thumbSlider.disabled = isAudio;
+
+  // --- блокируем saveBtn для аудио до готовности превью ---
+  if (isAudio) {
+    saveBtn.disabled = true;
+    saveBtn.style.opacity = 0.5; // визуально показать, что недоступна
+  } else {
+    saveBtn.disabled = false;
+    saveBtn.style.opacity = 1;
+  }
+
+  // --- создаём upload session ---
+  const start = await fetch("/api/upload/start", { method: "POST" });
   const data = await start.json();
   const id = data.id;
-
   currentId = id;
 
-  const CHUNK = 8 * 1024 * 1024; // 8MB
+  const CHUNK = 8 * 1024 * 1024;
   const totalChunks = Math.ceil(f.size / CHUNK);
-
   let uploaded = 0;
 
   for (let i = 0; i < totalChunks; i++) {
-    const start = i * CHUNK;
-    const end = Math.min(start + CHUNK, f.size);
+    const startByte = i * CHUNK;
+    const endByte = Math.min(startByte + CHUNK, f.size);
 
-    const chunk = f.slice(start, end);
-
+    const chunk = f.slice(startByte, endByte);
     const form = new FormData();
     form.append("id", id);
     form.append("index", i);
     form.append("chunk", chunk);
 
-    await fetch("/api/upload/chunk", {
-      method: "POST",
-      body: form,
-    });
-
+    await fetch("/api/upload/chunk", { method: "POST", body: form });
     uploaded++;
-
     const pct = Math.round((uploaded / totalChunks) * 100);
-
     status.innerText = `Загрузка: ${pct}%`;
     bar.style.width = pct + "%";
   }
 
-  // 3️⃣ merge chunks
+  // --- merge chunks ---
   await fetch("/api/upload/finish", {
     method: "POST",
-    body: JSON.stringify({
-      id: id,
-      filename: f.name,
-      total_chunks: totalChunks,
-    }),
-    headers: {
-      "Content-Type": "application/json",
-    },
+    body: JSON.stringify({ id, filename: f.name, total_chunks: totalChunks }),
+    headers: { "Content-Type": "application/json" },
   });
 
-  status.innerText = "Видео загружено. Выберите настройки превью.";
   bar.style.width = "100%";
 
-  meta.style.display = "block";
+  if (isAudio) {
+    status.innerText = "Обработка аудио и создание превью...";
 
-  titleInput.value = f.name;
+    thumbImg.alt = "Loading preview...";
+    let tries = 0;
+    const maxTries = 20; // 20 попыток
+    const wait = 500; // мс
 
-  const url = URL.createObjectURL(f);
-  const video = document.createElement("video");
-  video.src = url;
+    while (tries < maxTries) {
+      const res = await fetch(`/api/stream/${id}/thumb.jpg`, {
+        method: "HEAD",
+      });
+      if (res.ok) {
+        thumbImg.src = `/api/stream/${id}/thumb.jpg`;
+        thumbImg.alt = "Preview";
+        status.innerText = "Превью готово!";
+        saveBtn.disabled = false; // --- разблокируем saveBtn ---
+        saveBtn.style.opacity = 1;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, wait));
+      tries++;
+    }
 
-  await new Promise((r) => (video.onloadedmetadata = r));
-
-  fileDuration = video.duration;
-
-  durationText.innerText = formatTime(fileDuration);
-
-  thumbSlider.value = 0;
-  setThumbTime(0);
-  await generateThumbPreview(0);
-
-  URL.revokeObjectURL(url);
+    if (!thumbImg.src) {
+      thumbImg.alt = "Preview not available";
+      status.innerText = "Не удалось создать превью.";
+      saveBtn.disabled = true; // оставляем кнопку заблокированной
+      saveBtn.style.opacity = 0.5;
+    }
+  } else {
+    // --- video: генерация превью на лету ---
+    const url = URL.createObjectURL(f);
+    const video = document.createElement("video");
+    video.src = url;
+    await new Promise((r) => (video.onloadedmetadata = r));
+    fileDuration = video.duration;
+    durationText.innerText = formatTime(fileDuration);
+    thumbSlider.value = 0;
+    setThumbTime(0);
+    await generateThumbPreview(0);
+    URL.revokeObjectURL(url);
+    saveBtn.disabled = false;
+    saveBtn.style.opacity = 1;
+    status.innerText = "Выберите кадр для превью и сохраните.";
+  }
 };
 
 saveBtn.onclick = async () => {

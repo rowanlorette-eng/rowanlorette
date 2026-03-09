@@ -12,7 +12,8 @@ import (
 type Config struct {
 	Env           string     `yaml:"env"`
 	StoragePath   string     `yaml:"storage_path"`
-	Static        string     `yaml:"static"`
+	StaticPath    string     `yaml:"static"`
+	VideosPath    string     `yaml:"videos"`
 	FFmpegProfile string     `yaml:"ffmpeg_profile"`
 	HTTPServer    HTTPServer `yaml:"http_server"`
 }
