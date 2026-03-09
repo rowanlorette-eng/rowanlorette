@@ -264,6 +264,20 @@ func PublishHandler(storage *sqlite.Storage) http.HandlerFunc {
 }
 
 func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error {
+	// --- защита от выбора последнего кадра ---
+	duration, err := getVideoDuration(input)
+	if err == nil {
+		t, err2 := strconv.ParseFloat(thumbTime, 64)
+		if err2 == nil {
+			if t > duration-1 {
+				t = duration - 1
+			}
+			if t < 0 {
+				t = 0
+			}
+			thumbTime = fmt.Sprintf("%.2f", t)
+		}
+	}
 	// --- вспомогательная функция для сборки аргументов FFmpeg ---
 	buildArgs := func(mode string) []string {
 		args := []string{"-y"}
@@ -396,6 +410,23 @@ func GetVideoHandler(storage *sqlite.Storage) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
 	}
+}
+
+func getVideoDuration(input string) (float64, error) {
+	cmd := exec.Command(
+		"ffprobe",
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		input,
+	)
+
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, err
+	}
+
+	return strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
 }
 
 func Stream(w http.ResponseWriter, r *http.Request) {
