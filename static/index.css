@@ -12,39 +12,62 @@ body {
 }
 
 header {
-  background: #151936;
-  padding: 10px 40px;
-  position: sticky;
+  position: fixed;
   top: 0;
+  width: 100%;
+  z-index: 1000;
 }
 
 nav {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-direction: row-reverse;
+
+  padding: 6px 15px;
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  background: rgba(255, 255, 255, 0.05); /* почти прозрачная */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.nav-links {
+  display: flex;
+  gap: 15px;
+  order: 1;
+}
+
+.nav-links a {
+  text-decoration: none;
+  color: white;
+
+  padding: 2px 10px;
+  border-radius: 8px;
+
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 254, 254, 0.08);
+
+  transition: all 0.25s ease;
+}
+
+.nav-links a:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+.nav-links a:active {
+  transform: scale(0.96);
 }
 
 .logo {
   font-size: 22px;
   font-weight: bold;
-  background: linear-gradient(135deg, #55a6fc, #1e6af8, #8d2bce);
+  background: linear-gradient(135deg, #4da3ff, #00ffcc, #872cb9);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-}
-
-.nav-links a {
-  margin-left: 20px;
-  text-decoration: none;
-  color: #ffffff;
-  opacity: 0.85;
-  font-weight: bold;
-}
-
-.nav-links a:hover {
-  color: #4da3ff;
-  opacity: 1;
+  order: 2;
 }
 
 #video-container {
@@ -52,6 +75,8 @@ nav {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 16px;
   padding: 24px;
+
+  margin-top: 30px;
 }
 
 .video-card {
@@ -94,6 +119,43 @@ nav {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+footer {
+  background: #0b0e1a;
+  padding: 30px 40px;
+  text-align: center;
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+.footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  order: 1;
+}
+
+.footer-links a {
+  text-decoration: none;
+  color: white;
+
+  padding: 2px 10px;
+  border-radius: 8px;
+
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 254, 254, 0.08);
+
+  transition: all 0.25s ease;
+}
+
+.footer-links a:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+.footer-links a:active {
+  transform: scale(0.96);
 }
 
 @media (max-width: 1400px) {

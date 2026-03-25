@@ -514,6 +514,12 @@ func UploadChunkHandler() http.HandlerFunc {
 			return
 		}
 
+		err := r.ParseMultipartForm(32 << 20)
+		if err != nil {
+			http.Error(w, "multipart parse error", 400)
+			return
+		}
+
 		id := r.FormValue("id")
 		indexStr := r.FormValue("index")
 
@@ -544,19 +550,21 @@ func UploadChunkHandler() http.HandlerFunc {
 
 		partPath := filepath.Join(dir, fmt.Sprintf("%d.part", index))
 
+		// если chunk уже существует — пропускаем
 		if _, err := os.Stat(partPath); err == nil {
 			w.Write([]byte("ok"))
 			return
 		}
-		out, err := os.Create(partPath)
 
+		out, err := os.Create(partPath)
 		if err != nil {
 			http.Error(w, "cannot create chunk", 500)
 			return
 		}
 		defer out.Close()
 
-		if _, err := io.Copy(out, file); err != nil {
+		_, err = io.Copy(out, file)
+		if err != nil {
 			http.Error(w, "cannot save chunk", 500)
 			return
 		}

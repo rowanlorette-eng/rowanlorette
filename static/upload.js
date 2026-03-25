@@ -113,21 +113,44 @@ btn.onclick = async () => {
   const totalChunks = Math.ceil(f.size / CHUNK);
   let uploaded = 0;
 
-  for (let i = 0; i < totalChunks; i++) {
-    const startByte = i * CHUNK;
-    const endByte = Math.min(startByte + CHUNK, f.size);
+  try {
+    for (let i = 0; i < totalChunks; i++) {
+      const startByte = i * CHUNK;
+      const endByte = Math.min(startByte + CHUNK, f.size);
 
-    const chunk = f.slice(startByte, endByte);
-    const form = new FormData();
-    form.append("id", id);
-    form.append("index", i);
-    form.append("chunk", chunk);
+      const chunk = f.slice(startByte, endByte);
 
-    await fetch("/api/upload/chunk", { method: "POST", body: form });
-    uploaded++;
-    const pct = Math.round((uploaded / totalChunks) * 100);
-    status.innerText = `Загрузка: ${pct}%`;
-    bar.style.width = pct + "%";
+      const form = new FormData();
+      form.append("id", id);
+      form.append("index", i);
+      form.append("chunk", chunk);
+
+      const res = await fetch("/api/upload/chunk", {
+        method: "POST",
+        body: form,
+      });
+
+      if (!res.ok) {
+        throw new Error("chunk upload failed");
+      }
+
+      uploaded++;
+
+      const pct = Math.round((uploaded / totalChunks) * 100);
+
+      status.innerText = `Загрузка: ${pct}%`;
+      bar.style.width = pct + "%";
+    }
+  } catch (err) {
+    console.error("Upload error:", err);
+
+    status.innerText =
+      "Ошибка загрузки. Проверьте соединение или попробуйте снова.";
+    bar.style.width = "0%";
+
+    btn.classList.remove("hide");
+
+    return;
   }
 
   // --- merge chunks ---
