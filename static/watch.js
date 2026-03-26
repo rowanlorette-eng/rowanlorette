@@ -274,8 +274,6 @@ async function loadVideoList(reset = false) {
     let videos = await res.json();
     videos = Array.isArray(videos) ? videos : [];
 
-    shuffle(videos); // ← случайный порядок
-
     if (videos.length === 0) {
       listEnded = true;
       return;
@@ -299,14 +297,6 @@ async function loadVideoList(reset = false) {
       };
       list.appendChild(item);
     });
-
-    // --- VIRTUAL LIST: удаляем старые элементы сверху ---
-    while (list.children.length > MAX_DOM_ITEMS + 1) {
-      const first = list.children[1]; // [0] — spacer
-      removedHeight += first.offsetHeight;
-      list.removeChild(first);
-      topSpacer.style.height = removedHeight + "px";
-    }
 
     listOffset += videos.length;
   } catch (e) {
