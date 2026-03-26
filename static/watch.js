@@ -9,8 +9,9 @@ const MAX_DOM_ITEMS = 50;
 let listLoading = false;
 let listEnded = false;
 
-const shouldAutoplay = sessionStorage.getItem("autoplay") === "1";
-sessionStorage.removeItem("autoplay");
+function shouldAutoplayNow() {
+  return sessionStorage.getItem("autoplay") === "1";
+}
 
 const titleEl = document.getElementById("title");
 const player = document.getElementById("player");
@@ -59,6 +60,48 @@ function isLandscapeVideo() {
   return player.videoWidth > player.videoHeight;
 }
 
+async function openVideo(newId, autoplay = true) {
+  id = newId;
+
+  // меняем URL БЕЗ перезагрузки
+  history.pushState(null, "", `?v=${id}`);
+
+  // ставим autoplay
+  sessionStorage.setItem("autoplay", autoplay ? "1" : "0");
+
+  // грузим видео заново
+  await load();
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  if (!player) return;
+
+  if (shouldAutoplayNow()) {
+    try {
+      await player.play();
+      console.log("Autoplay сработал");
+
+      // ✅ удаляем флаг только после попытки воспроизведения
+      sessionStorage.removeItem("autoplay");
+    } catch (e) {
+      console.log("Autoplay заблокирован браузером", e);
+      const btn = document.createElement("button");
+      btn.textContent = "▶ Воспроизвести";
+      btn.style.position = "absolute";
+      btn.style.top = "50%";
+      btn.style.left = "50%";
+      btn.style.transform = "translate(-50%, -50%)";
+      btn.style.padding = "1rem 2rem";
+      btn.style.fontSize = "1.2rem";
+      btn.onclick = () => {
+        player.play();
+        sessionStorage.removeItem("autoplay"); // ❌ удаляем после ручного клика
+      };
+      document.body.appendChild(btn);
+    }
+  }
+});
+
 async function playNextVideo() {
   try {
     // получаем список видео
@@ -88,8 +131,7 @@ async function playNextVideo() {
     sessionStorage.setItem("autoplayWatched", JSON.stringify(watched));
 
     // ставим autoplay на следующем видео
-    sessionStorage.setItem("autoplay", "1");
-    location.href = `/watch?v=${nextVideo.id}`;
+    openVideo(nextVideo.id, true);
   } catch (e) {
     console.error("Ошибка перехода к следующему видео:", e);
   }
@@ -170,9 +212,10 @@ async function load() {
       document.body.innerHTML = "<h2>Нет видео для просмотра</h2>";
       return;
     }
-    id = await resp.text();
-    location.search = "?v=" + id;
-    return;
+
+    id = await resp.text(); // получаем случайное видео
+    history.pushState(null, "", `?v=${id}`); // обновляем URL
+    sessionStorage.setItem("autoplay", "1"); // включаем автоплей
   }
 
   const video = await fetch(`/api/video/${id}`).then((r) => r.json());
@@ -229,11 +272,14 @@ async function load() {
     hlsInstance.loadSource(url);
     hlsInstance.attachMedia(player);
 
-    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-      if (shouldAutoplay) {
-        player.play().catch((e) => {
+    hlsInstance.on(Hls.Events.MANIFEST_PARSED, async () => {
+      if (shouldAutoplayNow()) {
+        try {
+          await player.play();
+          sessionStorage.removeItem("autoplay");
+        } catch (e) {
           console.log("autoplay blocked", e);
-        });
+        }
       }
     });
 
@@ -242,7 +288,7 @@ async function load() {
   } else {
     player.src = url;
 
-    if (shouldAutoplay) {
+    if (shouldAutoplayNow()) {
       player.play().catch((e) => {
         console.log("autoplay blocked", e);
       });
@@ -292,8 +338,7 @@ async function loadVideoList(reset = false) {
         </div>
       `;
       item.onclick = () => {
-        sessionStorage.setItem("autoplay", "1");
-        location.href = `watch?v=${v.id}`;
+        openVideo(v.id, true);
       };
       list.appendChild(item);
     });
@@ -813,8 +858,7 @@ player.onended = async () => {
     watched.push(id);
     sessionStorage.setItem("autoplayWatched", JSON.stringify(watched));
 
-    sessionStorage.setItem("autoplay", "1");
-    location.href = `/watch?v=${nextVideo.id}`;
+    openVideo(nextVideo.id, true);
   } catch (e) {
     console.error("Ошибка автоперехода:", e);
   }

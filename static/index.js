@@ -20,9 +20,10 @@ function createVideoCard(video) {
   const card = document.createElement("div");
   card.className = "video-card";
 
-  card.onclick = () => {
-    sessionStorage.setItem("autoplay", "1");
-    window.location.href = `/watch?v=${video.id}`;
+  card.onclick = (e) => {
+    e.preventDefault(); // предотвращаем стандартный переход
+    sessionStorage.setItem("autoplay", "1"); // помечаем, что нужно автостартовать
+    window.location.href = `/watch?v=${video.id}`; // переходим на страницу видео
   };
 
   const thumb = document.createElement("div");
