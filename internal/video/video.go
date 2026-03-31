@@ -674,6 +674,7 @@ func UploadFinishHandler(storage *sqlite.Storage) http.HandlerFunc {
 				"-t", fmt.Sprintf("%.2f", duration),
 				"-pix_fmt", "yuv420p",
 				"-c:a", "aac",
+				"-map_metadata", "1",
 				tmpVideo,
 			)
 			out, err := cmd.CombinedOutput()
@@ -721,9 +722,14 @@ func UploadFinishHandler(storage *sqlite.Storage) http.HandlerFunc {
 
 		// --- обновляем описание асинхронно ---
 		go func() {
+			// --- извлекаем description из исходного аудио ---
 			desc, err := GetVideoDescription(input)
-			if err == nil && desc != "" {
-				storage.SetVideoDescription(req.ID, desc)
+			if err != nil {
+				log.Println("metadata read error for audio:", err)
+			} else if desc != "" {
+				if err := storage.SetVideoDescription(req.ID, desc); err != nil {
+					log.Println("cannot save description for audio:", err)
+				}
 			}
 		}()
 
