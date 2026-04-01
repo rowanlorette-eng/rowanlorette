@@ -46,7 +46,10 @@ var ffmpegVideoArgs = map[string][]string{
 	// === CPU ===
 	"cpu": {
 		"-c:v", "libx264",
-		"-preset", "veryfast",
+		"-preset", "slow",
+		"-crf", "18",
+		"-maxrate", "20M",
+		"-bufsize", "40M",
 	},
 
 	// === Intel iGPU (QSV) ===
@@ -58,8 +61,12 @@ var ffmpegVideoArgs = map[string][]string{
 	// === NVIDIA GPU (NVENC) ===
 	"nvidia": {
 		"-c:v", "h264_nvenc",
-		"-preset", "p4",
-		"-tune", "hq",
+		"-preset", "p5",
+		"-rc", "vbr",
+		"-cq", "19",
+		"-b:v", "0",
+		"-maxrate", "25M",
+		"-bufsize", "50M",
 	},
 
 	// === NVIDIA H.265 / HEVC кодирование через NVENC ===
@@ -305,6 +312,12 @@ func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error 
 		}
 		args = append(args,
 			"-c:a", "aac",
+			"-b:a", "128k",
+
+			"-pix_fmt", "yuv420p",
+			"-profile:v", "high",
+			"-level", "5.1",
+
 			"-hls_time", "4",
 			"-hls_playlist_type", "vod",
 			"-hls_segment_filename", filepath.Join(dir, "seg%03d.ts"),
