@@ -294,21 +294,6 @@ async function load() {
 
     hlsInstance.on(Hls.Events.MANIFEST_PARSED, async () => {
       populateQualityMenu(hlsInstance.levels);
-      const levels = hlsInstance.levels;
-
-      // выбираем максимальное качество (или можешь поменять на среднее)
-      const defaultLevel = levels.length - 1;
-
-      hlsInstance.currentLevel = defaultLevel;
-
-      // подсветить в меню
-      setTimeout(() => {
-        const items = qualityMenu.querySelectorAll(".settings-quality");
-        items.forEach((i) => i.classList.remove("active"));
-        if (items[defaultLevel]) {
-          items[defaultLevel].classList.add("active");
-        }
-      }, 0);
 
       if (shouldAutoplayNow()) {
         try {
@@ -542,6 +527,9 @@ qualityMenu.onclick = (e) => {
   } else {
     const level = parseInt(mode);
     hlsInstance.currentLevel = level;
+
+    savedQualityPosition = level;
+    localStorage.setItem("qualityPosition", level);
 
     player.style.display = "block";
     audioWrapper.style.display = "none";
