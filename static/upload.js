@@ -11,6 +11,31 @@ const thumbTimeText = document.getElementById("thumbTime");
 const thumbImg = document.getElementById("thumbImg");
 const saveBtn = document.getElementById("saveBtn");
 
+const encodeStatus = document.getElementById("encodeStatus");
+const encodeText = document.getElementById("encodeText");
+
+const encodeWrapper = document.getElementById("encodeStatus");
+const stage1080 = document.getElementById("stage1080");
+const stage2160 = document.getElementById("stage2160");
+
+function finalizeStages() {
+  // Завершаем оба stageBox
+  stage1080.classList.remove("active");
+  stage1080.classList.add("done");
+
+  stage2160.classList.remove("active");
+  stage2160.classList.add("done");
+
+  // Скрываем заголовок encodeTitle
+  const title = document.querySelector(".encodeTitle");
+  title.style.opacity = "0";
+  title.style.height = "0";
+  title.style.margin = "0";
+  title.style.overflow = "hidden";
+}
+
+let encodeStage = "1080"; // или 2160
+
 let currentId = null;
 let fileDuration = 0;
 let selectedThumbTime = 0;
@@ -77,6 +102,11 @@ btn.onclick = async () => {
   const f = document.getElementById("f").files[0];
   if (!f) {
     alert("Выберите видео или аудио");
+    return;
+  }
+
+  if (f.size > 5 * 1024 * 1024 * 1024) {
+    alert("Файл слишком большой");
     return;
   }
 
@@ -232,18 +262,72 @@ saveBtn.onclick = async () => {
   }
 
   status.innerText = "Видео отправлено на обработку...";
+  encodeStatus.style.display = "block";
+
+  encodeStage = "1080";
+  encodeStartTime = Date.now();
+
+  encodeWrapper.style.display = "block";
+  stage1080.classList.add("active");
   bar.style.width = "30%";
 
   // скрываем save кнопку
   saveBtn.style.display = "none";
 
-  // проверяем статус каждые 1 сек
-  while (true) {
+  // проверяем статус каждые сек
+
+  const applyStage = (stage) => {
+    // 1080p активна
+    if (stage === "1080") {
+      stage1080.classList.add("active");
+      stage1080.classList.remove("done");
+    }
+
+    // 1080p завершена, если стадия дальше
+    if (["1080_done", "2160", "done"].includes(stage)) {
+      stage1080.classList.remove("active");
+      stage1080.classList.add("done");
+      stage2160.style.display = "block"; // показываем 2160p
+    }
+
+    // 2160p активна
+    if (stage === "2160") {
+      stage2160.classList.add("active");
+      stage2160.classList.remove("done");
+    }
+
+    // 2160p и финал
+    if (stage === "done") {
+      finalizeStages(); // теперь 2160p тоже завершается
+    }
+  };
+
+  let stopped = false;
+
+  window.addEventListener("beforeunload", () => {
+    stopped = true;
+  });
+
+  while (!stopped) {
     const r = await fetch(`/api/video/${currentId}`);
+
+    if (!r.ok) {
+      status.innerText = "Ошибка связи с сервером";
+      break;
+    }
+
     const data = await r.json();
 
     if (data.status === "ready") {
+      // скрываем только заголовок
+      const title = document.querySelector(".encodeTitle");
+      title.style.opacity = "0";
+      title.style.height = "0";
+      title.style.margin = "0";
+      title.style.overflow = "hidden";
+
       status.innerText = "Видео обработано успешно!";
+      //encodeText.innerText = "Обработка завершена ✔";
       bar.style.width = "100%";
 
       watchBtn.style.display = "block";
@@ -253,6 +337,7 @@ saveBtn.onclick = async () => {
         // переходим на страницу просмотра
         location.href = `watch.html?v=${currentId}`;
       };
+      finalizeStages();
       return;
     }
 
@@ -271,6 +356,10 @@ saveBtn.onclick = async () => {
       bar.style.width = "60%";
     }
 
-    await new Promise((r) => setTimeout(r, 1000));
+    console.log("STAGE:", data.stage);
+
+    applyStage(data.stage);
+
+    await new Promise((r) => setTimeout(r, 3000));
   }
 };

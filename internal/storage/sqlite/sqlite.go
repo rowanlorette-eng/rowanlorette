@@ -19,6 +19,7 @@ type Video struct {
 	Thumbnail   string
 	Description string
 	Progress    int
+	Stage       string
 }
 
 // Инициализация базы
@@ -33,13 +34,14 @@ func Init(storagePath string) (*Storage, error) {
 	}
 
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS videos (
-		id TEXT PRIMARY KEY,
-		title TEXT,
-		status TEXT,
-		thumbnail TEXT,
-		description TEXT,
-		progress INTEGER DEFAULT 0,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	id TEXT PRIMARY KEY,
+	title TEXT,
+	status TEXT,
+	thumbnail TEXT,
+	description TEXT,
+	progress INTEGER DEFAULT 0,
+	stage TEXT DEFAULT '',
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`); err != nil {
 		return nil, fmt.Errorf("init: failed to create videos table in sqlite database at %s: %w", storagePath, err)
 	}
@@ -73,28 +75,53 @@ func (s *Storage) ListVideos(limit, offset int) ([]Video, error) {
 	return videos, nil
 }
 
+func (s *Storage) SetVideoStage(id, stage string, progress int) error {
+	_, err := s.DB.Exec(`
+		UPDATE videos
+		SET stage = ?, progress = ?
+		WHERE id = ?
+	`, stage, progress, id)
+
+	if err != nil {
+		fmt.Println("SetVideoStage ERROR:", err)
+	}
+
+	return err
+}
+
 // Возвращает одно видео по ID
 func (s *Storage) GetVideo(id string) (*Video, error) {
 	var desc sql.NullString
+	var stage sql.NullString
+	var thumb sql.NullString
+
 	row := s.DB.QueryRow(`
-		SELECT title, status, thumbnail, description, progress
+		SELECT title, status, thumbnail, description, progress, stage
 		FROM videos
 		WHERE id = ?
 	`, id)
 
 	var v Video
 	v.ID = id
-	if err := row.Scan(&v.Title, &v.Status, &v.Thumbnail, &desc, &v.Progress); err != nil {
-		if errors.Is(err, sql.ErrNoRows) { // ← вот так правильно
+
+	err := row.Scan(&v.Title, &v.Status, &thumb, &desc, &v.Progress, &stage)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("GetVideo scan failed: %w", err)
 	}
 
+	if thumb.Valid {
+		v.Thumbnail = thumb.String
+	}
+
 	if desc.Valid {
 		v.Description = desc.String
-	} else {
-		v.Description = ""
+	}
+
+	if stage.Valid {
+		v.Stage = stage.String
 	}
 
 	return &v, nil
@@ -136,9 +163,10 @@ func (s *Storage) CreateVideo(id, title, status string, progress int) error {
 func (s *Storage) SetVideoProcessing(id, title string) error {
 	_, err := s.DB.Exec(`
 		UPDATE videos
-		SET title = ?, status = 'processing', progress = 0
+		SET title = ?, status = 'processing', progress = 0, stage = 'init'
 		WHERE id = ?
 	`, title, id)
+
 	if err != nil {
 		return fmt.Errorf("SetVideoProcessing failed: %w", err)
 	}

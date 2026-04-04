@@ -42,6 +42,9 @@ const videoDescription = document.getElementById("videoDescription");
 const descContent = document.getElementById("descContent");
 const descToggle = document.getElementById("descToggle");
 
+// 0 — минимальное, 1 — максимальное, по дефолту 0
+let savedQualityPosition = Number(localStorage.getItem("qualityPosition")) || 0;
+
 let descriptionExpanded = false;
 
 const topSpacer = document.getElementById("top-spacer");
@@ -85,19 +88,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       sessionStorage.removeItem("autoplay");
     } catch (e) {
       console.log("Autoplay заблокирован браузером", e);
-      const btn = document.createElement("button");
-      btn.textContent = "▶ Воспроизвести";
-      btn.style.position = "absolute";
-      btn.style.top = "50%";
-      btn.style.left = "50%";
-      btn.style.transform = "translate(-50%, -50%)";
-      btn.style.padding = "1rem 2rem";
-      btn.style.fontSize = "1.2rem";
-      btn.onclick = () => {
-        player.play();
-        sessionStorage.removeItem("autoplay"); // ❌ удаляем после ручного клика
-      };
-      document.body.appendChild(btn);
+      //const btn = document.createElement("button");
+      // btn.textContent = "▶ Воспроизвести";
+      // btn.style.position = "absolute";
+      // btn.style.top = "50%";
+      // btn.style.left = "50%";
+      // btn.style.transform = "translate(-50%, -50%)";
+      // btn.style.padding = "1rem 2rem";
+      // btn.style.fontSize = "1.2rem";
+      // btn.onclick = () => {
+      //   player.play();
+      //   sessionStorage.removeItem("autoplay"); // ❌ удаляем после ручного клика
+      // };
+      // document.body.appendChild(btn);
     }
   }
 });
@@ -207,39 +210,47 @@ function shuffle(array) {
 
 async function load() {
   if (!id) {
+    // Получаем случайное видео, если нет id
     const resp = await fetch("/api/random");
     if (!resp.ok) {
       document.body.innerHTML = "<h2>Нет видео для просмотра</h2>";
       return;
     }
-
-    id = await resp.text(); // получаем случайное видео
-    history.pushState(null, "", `?v=${id}`); // обновляем URL
-    sessionStorage.setItem("autoplay", "1"); // включаем автоплей
+    id = await resp.text();
+    history.replaceState(null, "", `?v=${id}`);
+    sessionStorage.setItem("autoplay", "1"); // автоплей по умолчанию
   }
 
-  const video = await fetch(`/api/video/${id}`).then((r) => r.json());
-  titleEl.innerText = video.title || "";
-  document.title = video.title + " - Umbrella Play";
+  // Получаем данные видео
+  let videoData;
+  try {
+    const res = await fetch(`/api/video/${id}`);
+    videoData = await res.json();
+  } catch (err) {
+    console.error("Ошибка получения данных видео:", err);
+    statusEl.innerText = "Ошибка загрузки видео";
+    return;
+  }
 
+  titleEl.innerText = videoData.title || "";
+  document.title = (videoData.title || "") + " - Umbrella Play";
+
+  // Сбрасываем описание
   descriptionExpanded = false;
   videoDescription.classList.remove("expanded");
   descToggle.textContent = "…ещё";
-  videoDescription.addEventListener("click", toggleDescription);
 
-  if (video.description) {
-    renderDescription(video.description.trim());
+  // Обработка описания
+  if (videoData.description) {
+    renderDescription(videoData.description.trim());
     videoDescription.style.display = "block";
   } else {
     videoDescription.style.display = "none";
   }
 
-  // функция рендеринга Markdown и ссылок
   function renderDescription(markdown) {
     const html = marked.parse(markdown);
     descContent.innerHTML = html;
-
-    // делаем ссылки кликабельными и синими
     descContent.querySelectorAll("a").forEach((a) => {
       a.target = "_blank";
       a.rel = "noopener noreferrer";
@@ -248,56 +259,106 @@ async function load() {
     });
   }
 
-  if (video.status === "processing") {
+  // Статус видео
+  if (videoData.status === "processing") {
     statusEl.innerText = "Видео обрабатывается...";
-    setTimeout(load, 1000);
+    setTimeout(load, 1500);
     return;
   }
 
-  if (video.status === "error") {
+  if (videoData.status === "error") {
     statusEl.innerText = "Ошибка транскодинга";
     return;
   }
 
-  const url = video.stream_url + "/index.m3u8";
+  // --- поток HLS ---
+  let streamURL = videoData.stream_url;
+  if (!streamURL.endsWith(".m3u8")) {
+    streamURL = streamURL.replace(/\/+$/, "") + "/index.m3u8";
+  }
 
-  // destroy old HLS if exists
+  // Уничтожаем старый плеер
   if (hlsInstance) {
-    hlsInstance.destroy();
+    try {
+      hlsInstance.destroy();
+    } catch (e) {}
     hlsInstance = null;
   }
+  player.src = "";
+  audioPlayer.src = "";
 
   if (Hls.isSupported()) {
     hlsInstance = new Hls();
-    hlsInstance.loadSource(url);
+    hlsInstance.loadSource(streamURL);
     hlsInstance.attachMedia(player);
 
     hlsInstance.on(Hls.Events.MANIFEST_PARSED, async () => {
+      populateQualityMenu(hlsInstance.levels);
+      const levels = hlsInstance.levels;
+
+      // выбираем максимальное качество (или можешь поменять на среднее)
+      const defaultLevel = levels.length - 1;
+
+      hlsInstance.currentLevel = defaultLevel;
+
+      // подсветить в меню
+      setTimeout(() => {
+        const items = qualityMenu.querySelectorAll(".settings-quality");
+        items.forEach((i) => i.classList.remove("active"));
+        if (items[defaultLevel]) {
+          items[defaultLevel].classList.add("active");
+        }
+      }, 0);
+
       if (shouldAutoplayNow()) {
         try {
           await player.play();
           sessionStorage.removeItem("autoplay");
         } catch (e) {
-          console.log("autoplay blocked", e);
+          console.log("Autoplay заблокирован браузером", e);
         }
       }
     });
 
     hlsInstance.on(Hls.Events.LEVEL_LOADED, updateBuffer);
     hlsInstance.on(Hls.Events.FRAG_BUFFERED, updateBuffer);
-  } else {
-    player.src = url;
-
-    if (shouldAutoplayNow()) {
-      player.play().catch((e) => {
-        console.log("autoplay blocked", e);
-      });
-    }
+  } else if (player.canPlayType("application/vnd.apple.mpegurl")) {
+    player.src = streamURL;
+    player.addEventListener("loadedmetadata", () => {
+      player.play().catch(() => {});
+    });
   }
 
-  // audio-only source
-  audioPlayer.src = url;
+  // --- audio-only ---
+  audioPlayer.src = streamURL;
 
+  // --- меню качества ---
+  function populateQualityMenu(levels) {
+    qualityMenu.innerHTML = "";
+
+    // строим только видео качества
+    levels.forEach((level, idx) => {
+      const item = document.createElement("div");
+      item.className = "settings-quality";
+      item.dataset.quality = idx;
+      item.textContent = level.height + "p";
+      qualityMenu.appendChild(item);
+    });
+
+    // Подсветка дефолтного качества
+    const pos = Math.min(savedQualityPosition, levels.length - 1);
+    hlsInstance.currentLevel = pos;
+
+    setTimeout(() => {
+      const items = qualityMenu.querySelectorAll(".settings-quality");
+      items.forEach((i) => i.classList.remove("active"));
+      if (items[pos]) items[pos].classList.add("active");
+    }, 0);
+  }
+
+  // обработка клика по качеству
+
+  // Показ списка видео
   loadVideoList(true);
 }
 
@@ -464,22 +525,24 @@ qualityBtn.onclick = (e) => {
 };
 
 qualityMenu.onclick = (e) => {
-  const item = e.target.closest(".settings-item");
-  if (!item) return;
+  const item = e.target.closest(".settings-quality");
+  if (!item || !hlsInstance) return;
+
   const mode = item.dataset.quality;
 
-  document
-    .querySelectorAll("#qualityMenu .settings-item")
+  qualityMenu
+    .querySelectorAll(".settings-quality")
     .forEach((i) => i.classList.remove("active"));
   item.classList.add("active");
-
-  if (!hlsInstance) return;
 
   if (mode === "audio") {
     player.style.display = "none";
     audioWrapper.style.display = "block";
     audioPlayer.play();
   } else {
+    const level = parseInt(mode);
+    hlsInstance.currentLevel = level;
+
     player.style.display = "block";
     audioWrapper.style.display = "none";
     player.play();
@@ -794,36 +857,32 @@ volume.value = lastVolume;
 player.muted = lastVolume === 0;
 updateMuteIcon();
 
+// Клик по блоку раскрывает описание только в свернутом виде
+videoDescription.addEventListener("click", () => {
+  if (!descriptionExpanded) toggleDescription();
+});
+
+// Клик по кнопке "свернуть" закрывает описание
+descToggle.addEventListener("click", (e) => {
+  e.stopPropagation(); // чтобы не срабатывал клик по блоку
+  toggleDescription();
+});
+
 function toggleDescription() {
   descriptionExpanded = !descriptionExpanded;
 
   if (descriptionExpanded) {
+    // Раскрываем описание
     videoDescription.classList.add("expanded");
     descToggle.textContent = "свернуть";
-
-    // Раскрытое описание поверх видео
     videoDescription.style.zIndex = "10";
-
-    // 🔴 Убираем большую кнопку
-    // отключаем клик на весь блок
-    videoDescription.removeEventListener("click", toggleDescription);
   } else {
+    // Свертываем описание
     videoDescription.classList.remove("expanded");
     descToggle.textContent = "…ещё";
-
-    // Свернутое описание под видео
     videoDescription.style.zIndex = "1";
-
-    // 🟢 Возвращаем большую кнопку
-    // возвращаем клик
-    videoDescription.addEventListener("click", toggleDescription);
   }
 }
-
-descToggle.addEventListener("click", (e) => {
-  e.stopPropagation();
-  toggleDescription();
-});
 
 // ----------------- AUTOPLAY NEXT VIDEO -----------------
 player.onended = async () => {

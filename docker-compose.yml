@@ -12,7 +12,7 @@ services:
 
   app-gpu:
     build: .
-    container_name: umbrella-video
+    container_name: umbrella-video-gpu
     ports:
       - "8080:8080"
     volumes:

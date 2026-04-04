@@ -35,6 +35,7 @@ type VideoResponse struct {
 	Thumbnail   string `json:"thumbnail"`
 	Description string `json:"description"`
 	Progress    int    `json:"progress"`
+	Stage       string `json:"stage"`
 }
 type ffprobeOutput struct {
 	Format struct {
@@ -87,6 +88,65 @@ var ffmpegVideoArgs = map[string][]string{
 	},
 }
 
+func getVideoHeight(input string) (int, error) {
+	cmd := exec.Command(
+		"ffprobe",
+		"-v", "error",
+		"-select_streams", "v:0",
+		"-show_entries", "stream=height",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		input,
+	)
+
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, err
+	}
+
+	h, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil {
+		return 0, err
+	}
+	log.Println("VIDEO HEIGHT:", h)
+
+	return h, nil
+}
+
+func getVideoResolution(input string) (width int, height int, err error) {
+	cmd := exec.Command(
+		"ffprobe",
+		"-v", "error",
+		"-select_streams", "v:0",
+		"-show_entries", "stream=width,height",
+		"-of", "csv=p=0:s=x",
+		input,
+	)
+
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	parts := strings.Split(strings.TrimSpace(string(out)), "x")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("invalid resolution output: %s", string(out))
+	}
+
+	w, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, err
+	}
+
+	h, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, err
+	}
+
+	log.Println("VIDEO RESOLUTION:", w, "x", h)
+
+	return w, h, nil
+}
+
 func ListVideos(storage *sqlite.Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		offset := 0
@@ -122,7 +182,7 @@ func ListVideos(storage *sqlite.Storage) http.HandlerFunc {
 				Status:    v.Status,
 				Progress:  v.Progress,
 				Thumbnail: v.Thumbnail,
-				StreamURL: "/api/stream/" + v.ID,
+				StreamURL: "/api/stream/" + v.ID + "/master.m3u8",
 			})
 		}
 
@@ -279,92 +339,229 @@ func PublishHandler(storage *sqlite.Storage) http.HandlerFunc {
 }
 
 func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error {
+	// --- validate input ---
+	if !fileExists(input) {
+		storage.SetVideoError(id)
+		return fmt.Errorf("input file not found")
+	}
+
+	// --- normalize thumb time ---
 	duration, err := getVideoDuration(input)
 	if err == nil {
-		t, err2 := strconv.ParseFloat(thumbTime, 64)
-		if err2 == nil {
-			if t > duration-1 {
-				t = duration - 1
-			}
+		if t, err := strconv.ParseFloat(thumbTime, 64); err == nil {
 			if t < 0 {
 				t = 0
+			}
+			if t > duration-1 {
+				t = duration - 1
 			}
 			thumbTime = fmt.Sprintf("%.2f", t)
 		}
 	}
 
-	ext := strings.ToLower(filepath.Ext(input))
-	isAudio := ext == ".mp3" || ext == ".wav" || ext == ".flac"
-
-	buildArgs := func(mode string) []string {
-		args := []string{"-y"}
-		switch mode {
-		case "intel":
-			args = append(args, "-hwaccel", "qsv")
-		case "amd_vaapi":
-			args = append(args, "-hwaccel", "vaapi", "-hwaccel_device", "/dev/dri/renderD128")
-		}
-		args = append(args, "-i", input)
-		if opts, ok := ffmpegVideoArgs[mode]; ok {
-			args = append(args, opts...)
-		} else {
-			args = append(args, ffmpegVideoArgs["cpu"]...)
-		}
-		args = append(args,
-			"-c:a", "aac",
-			"-b:a", "128k",
-
-			"-pix_fmt", "yuv420p",
-			"-profile:v", "high",
-			"-level", "5.1",
-
-			"-hls_time", "4",
-			"-hls_playlist_type", "vod",
-			"-hls_segment_filename", filepath.Join(dir, "seg%03d.ts"),
-			filepath.Join(dir, "index.m3u8"),
-		)
-		return args
-	}
-
-	runFFmpeg := func(args []string) ([]byte, error) {
-		cmd := exec.Command("ffmpeg", args...)
-		return cmd.CombinedOutput()
-	}
-
-	out, err := runFFmpeg(buildArgs(MODE))
-	if err != nil {
-		logLower := strings.ToLower(string(out))
-		if strings.Contains(logLower, "nvenc") || strings.Contains(logLower, "no capable devices") || strings.Contains(logLower, "driver") {
-			out, err = runFFmpeg(buildArgs("cpu"))
-		}
-	}
+	// --- detect video params ---
+	width, height, err := getVideoResolution(input)
 	if err != nil {
 		storage.SetVideoError(id)
-		return fmt.Errorf("ffmpeg HLS failed: %w\n%s", err, string(out))
+		return fmt.Errorf("ffprobe failed: %w", err)
 	}
 
-	// --- Thumbnail ---
-	thumbPath := filepath.Join(dir, "thumb.jpg")
-	if isAudio {
-		cover := filepath.Join(dir, "thumb.jpg")
-		if !fileExists(cover) {
-			cover = "static/def.jpg"
+	// ✅ правильное определение 4K
+	is4k := width >= 3000 // 4K обычно ≥ 3840
+
+	log.Println("DETECTED:",
+		"width=", width,
+		"height=", height,
+		"is4k=", is4k,
+	)
+
+	// --- select encoder profile ---
+	profile, ok := ffmpegVideoArgs[MODE]
+	if !ok {
+		log.Println("Unknown MODE, fallback to cpu:", MODE)
+		profile = ffmpegVideoArgs["cpu"]
+	}
+
+	run := func(args []string) error {
+		cmd := exec.Command("ffmpeg", args...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Println("FFMPEG ERROR:", string(out))
+			return fmt.Errorf("ffmpeg failed: %w", err)
 		}
-		thumbCmd := exec.Command("ffmpeg", "-y", "-i", cover, "-frames:v", "1", "-q:v", "2", thumbPath)
-		if out, err := thumbCmd.CombinedOutput(); err != nil {
+		return nil
+	}
+
+	// =======================
+	// 📁 dirs
+	// =======================
+	dir1080 := filepath.Join(dir, "1080")
+	if err := os.MkdirAll(dir1080, 0755); err != nil {
+		return err
+	}
+
+	var dir2160 string
+	if is4k {
+		dir2160 = filepath.Join(dir, "2160")
+		if err := os.MkdirAll(dir2160, 0755); err != nil {
+			return err
+		}
+	}
+
+	// =======================
+	// 🔥 1080p
+	// =======================
+	storage.SetVideoStage(id, "1080", 10)
+
+	args1080 := []string{
+		"-y",
+		"-i", input,
+		"-vf", "scale=-2:1080",
+	}
+
+	args1080 = append(args1080, profile...)
+
+	args1080 = append(args1080,
+		"-b:v", "6000k",
+		"-maxrate", "6500k",
+		"-bufsize", "12000k",
+		"-c:a", "copy",
+		"-pix_fmt", "yuv420p",
+		"-hls_time", "4",
+		"-hls_playlist_type", "vod",
+		"-hls_segment_filename", filepath.Join(dir1080, "seg%03d.ts"),
+		filepath.Join(dir1080, "index.m3u8"),
+	)
+
+	if err := run(args1080); err != nil {
+		log.Println("1080 GPU failed → fallback CPU")
+
+		argsFallback := []string{
+			"-y", "-i", input,
+			"-vf", "scale=-2:1080",
+		}
+		argsFallback = append(argsFallback, ffmpegVideoArgs["cpu"]...)
+		argsFallback = append(argsFallback,
+			"-b:v", "6000k",
+			"-maxrate", "6500k",
+			"-bufsize", "12000k",
+			"-c:a", "copy",
+			"-pix_fmt", "yuv420p",
+			"-hls_time", "4",
+			"-hls_playlist_type", "vod",
+			"-hls_segment_filename", filepath.Join(dir1080, "seg%03d.ts"),
+			filepath.Join(dir1080, "index.m3u8"),
+		)
+
+		if err := run(argsFallback); err != nil {
 			storage.SetVideoError(id)
-			return fmt.Errorf("thumbnail (audio) failed: %w\n%s", err, string(out))
+			return fmt.Errorf("1080p failed completely")
 		}
+	}
+
+	storage.SetVideoStage(id, "1080_done", 50)
+
+	// =======================
+	// 🔥 2160p
+	// =======================
+	if is4k {
+		storage.SetVideoStage(id, "2160", 70)
+
+		args2160 := []string{
+			"-y",
+			"-i", input,
+		}
+
+		args2160 = append(args2160, profile...)
+
+		args2160 = append(args2160,
+			"-b:v", "25000k",
+			"-maxrate", "26000k",
+			"-bufsize", "50000k",
+			"-c:a", "copy",
+			"-pix_fmt", "yuv420p",
+			"-hls_time", "4",
+			"-hls_playlist_type", "vod",
+			"-hls_segment_filename", filepath.Join(dir2160, "seg%03d.ts"),
+			filepath.Join(dir2160, "index.m3u8"),
+		)
+
+		if err := run(args2160); err != nil {
+			log.Println("2160 GPU failed → fallback CPU")
+
+			argsFallback := []string{
+				"-y", "-i", input,
+			}
+			argsFallback = append(argsFallback, ffmpegVideoArgs["cpu"]...)
+			argsFallback = append(argsFallback,
+				"-b:v", "25000k",
+				"-maxrate", "26000k",
+				"-bufsize", "50000k",
+				"-c:a", "copy",
+				"-pix_fmt", "yuv420p",
+				"-hls_time", "4",
+				"-hls_playlist_type", "vod",
+				"-hls_segment_filename", filepath.Join(dir2160, "seg%03d.ts"),
+				filepath.Join(dir2160, "index.m3u8"),
+			)
+
+			if err := run(argsFallback); err != nil {
+				storage.SetVideoError(id)
+				return fmt.Errorf("2160p failed completely")
+			}
+		}
+	}
+
+	// =======================
+	// 🎯 master playlist
+	// =======================
+	masterPath := filepath.Join(dir, "master.m3u8")
+
+	f, err := os.Create(masterPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if is4k {
+		f.WriteString(`#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=8000000,RESOLUTION=1920x1080
+1080/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=25000000,RESOLUTION=3840x2160
+2160/index.m3u8
+`)
 	} else {
-		thumbCmd := exec.Command("ffmpeg", "-y", "-ss", thumbTime, "-i", input, "-frames:v", "1", "-q:v", "2", thumbPath)
-		if out, err := thumbCmd.CombinedOutput(); err != nil {
-			storage.SetVideoError(id)
-			return fmt.Errorf("thumbnail failed: %w\n%s", err, string(out))
-		}
+		f.WriteString(`#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=8000000,RESOLUTION=1920x1080
+1080/index.m3u8
+`)
 	}
 
-	// --- удаляем исходник ---
+	// =======================
+	// 🖼 thumbnail
+	// =======================
+	thumbPath := filepath.Join(dir, "thumb.jpg")
+
+	cmd := exec.Command(
+		"ffmpeg",
+		"-y",
+		"-ss", thumbTime,
+		"-i", input,
+		"-frames:v", "1",
+		"-q:v", "2",
+		thumbPath,
+	)
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Println("thumbnail error:", string(out))
+		storage.SetVideoError(id)
+		return fmt.Errorf("thumbnail failed")
+	}
+
+	// cleanup
 	_ = os.Remove(input)
+
+	storage.SetVideoStage(id, "done", 100)
 
 	if err := storage.SetVideoReadyWithThumbnail(id, "/api/stream/"+id+"/thumb.jpg"); err != nil {
 		return err
@@ -376,11 +573,16 @@ func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error 
 func GetVideoHandler(storage *sqlite.Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := strings.TrimPrefix(r.URL.Path, "/api/video/")
+		id = strings.TrimSpace(id)
+
+		if id == "" {
+			writeJSONError(w, http.StatusBadRequest, "missing video id")
+			return
+		}
 
 		v, err := storage.GetVideo(id)
 		if err != nil {
-			// ⬇ ВАЖНО: во время processing это не ошибка сервера
-			writeJSONError(w, http.StatusOK, "processing")
+			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 
@@ -389,10 +591,19 @@ func GetVideoHandler(storage *sqlite.Storage) http.HandlerFunc {
 			return
 		}
 
-		// Обрабатываем null/пустое описание
-		desc := v.Description
-		if desc == "" {
-			desc = "" // можно поставить "Нет описания", если хотите
+		// --- FIX: гарантируем stage ---
+		stage := v.Stage
+		if stage == "" {
+			switch v.Status {
+			case "processing":
+				stage = "init"
+			case "ready":
+				stage = "done"
+			case "error":
+				stage = "error"
+			default:
+				stage = "init"
+			}
 		}
 
 		resp := VideoResponse{
@@ -400,9 +611,10 @@ func GetVideoHandler(storage *sqlite.Storage) http.HandlerFunc {
 			Title:       v.Title,
 			Status:      v.Status,
 			Thumbnail:   v.Thumbnail,
-			Description: desc,
+			Description: v.Description,
 			Progress:    v.Progress,
-			StreamURL:   "/api/stream/" + v.ID,
+			Stage:       stage,
+			StreamURL:   "/api/stream/" + v.ID + "/master.m3u8",
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -686,7 +898,7 @@ func UploadFinishHandler(storage *sqlite.Storage) http.HandlerFunc {
 				"-c:v", "libx264",
 				"-t", fmt.Sprintf("%.2f", duration),
 				"-pix_fmt", "yuv420p",
-				"-c:a", "aac",
+				"-c:a", "copy",
 				"-map_metadata", "1",
 				tmpVideo,
 			)

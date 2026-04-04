@@ -131,6 +131,92 @@ button:hover {
   overflow: hidden;
 }
 
+.encodeStatus {
+  position: relative;
+  margin-top: 20px;
+  padding: 12px 20px;
+  width: fit-content;
+  max-width: 500px;
+  border-radius: 12px;
+  background: #0f172a;
+  color: #3b82f6;
+  font-size: 14px;
+}
+
+/* 🔥 АНИМИРОВАННАЯ РАМКА */
+
+.encodeWrapper {
+  margin-top: 20px;
+}
+
+.encodeTitle {
+  margin-bottom: 10px;
+  font-size: 14px;
+  opacity: 0.8;
+  transition: opacity 0.5s ease;
+}
+
+.encodeStages {
+  display: flex;
+  gap: 12px;
+}
+
+/* базовый блок */
+.stageBox {
+  position: relative;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #3b82f6;
+  z-index: 0;
+}
+
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes rotateBorder {
+  from {
+    --angle: 0deg;
+  }
+  to {
+    --angle: 360deg;
+  }
+}
+
+/* 🔥 АКТИВНАЯ АНИМАЦИЯ */
+.stageBox.active::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  z-index: -1;
+
+  background: conic-gradient(
+    from var(--angle),
+    transparent 0deg,
+    #3b82f6 40deg,
+    transparent 80deg
+  );
+
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+
+  animation: rotateBorder 2s linear infinite;
+}
+
+/* завершённый */
+.stageBox.done {
+  color: #22c55e;
+  background: #052e1c;
+}
+
 .bar {
   height: 100%;
   width: 0%;

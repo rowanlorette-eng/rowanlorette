@@ -197,6 +197,7 @@ video {
 .controls-right {
   display: flex;
   align-items: center;
+  gap: 5px;
 }
 
 .control-btn {
@@ -389,7 +390,7 @@ video {
   bottom: 60px;
   right: 16px;
   width: 220px;
-  background: rgba(11, 11, 11, 0.95);
+  background: rgba(11, 11, 11, 0.75);
   border-radius: 10px;
   font-size: 14px;
   display: none;
@@ -409,13 +410,31 @@ video {
   background: rgba(255, 255, 255, 0.1);
 }
 
-.settings-item.active::before {
-  content: "✔";
-  margin-right: 6px;
-  color: #4da3ff;
+/* Settings - quality*/
+
+.settings-quality {
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  position: relative; /* якорь для ::before */
+  padding-left: 40px; /* место под галочку */
 }
 
-.settings-item .arrow {
+.settings-quality:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.settings-quality.active::before {
+  content: "✔";
+  margin-right: 6px;
+  color: #4dd1ff;
+  position: absolute;
+  left: 18px;
+}
+
+.settings-quality .arrow {
   margin-left: auto;
   opacity: 0.6;
 }
@@ -425,11 +444,6 @@ video {
   flex-direction: column;
 }
 
-#repeatIcon {
-  width: 24px;
-  height: 24px;
-  transition: transform 0.2s;
-}
 .settings-item.active img#repeatIcon {
   transform: rotate(360deg);
 }
