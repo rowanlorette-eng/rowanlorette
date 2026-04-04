@@ -553,6 +553,8 @@ qualityMenu.onclick = (e) => {
 };
 
 // ----------------- CONTROLS -----------------
+
+// --- show/hide controls как у тебя ---
 function showControls() {
   controls.style.opacity = "1";
   controls.style.transform = "translateY(0)";
@@ -560,6 +562,14 @@ function showControls() {
   seek.style.transform = "translateY(0)";
   buffer.style.opacity = "1";
   buffer.style.transform = "translateY(0)";
+
+  // если меню уже открыто, поддерживаем его видимым
+  if (settingsMenu.classList.contains("open")) {
+    settingsMenu.style.opacity = "1";
+    settingsMenu.style.transform = "translateY(0)";
+    settingsMenu.style.pointerEvents = "auto";
+  }
+
   if (hideTimer) clearTimeout(hideTimer);
   hideTimer = setTimeout(hideControls, AUTO_HIDE_MS);
 }
@@ -571,7 +581,48 @@ function hideControls() {
   seek.style.transform = "translateY(20px)";
   buffer.style.opacity = "0";
   buffer.style.transform = "translateY(20px)";
+
+  // меню тоже скрываем, но класс open оставляем для клика
+  if (settingsMenu.classList.contains("open")) {
+    settingsMenu.style.opacity = "0";
+    settingsMenu.style.transform = "translateY(20px)";
+    settingsMenu.style.pointerEvents = "none";
+  }
 }
+
+// --- кнопка настроек ---
+settingsBtn.addEventListener("click", (e) => {
+  e.stopPropagation(); // чтобы клик не уходил в видео
+  if (settingsMenu.classList.contains("open")) {
+    // закрываем
+    settingsMenu.classList.remove("open");
+    settingsMenu.style.opacity = "0";
+    settingsMenu.style.transform = "translateY(20px)";
+    settingsMenu.style.pointerEvents = "none";
+  } else {
+    // открываем
+    settingsMenu.classList.add("open");
+    settingsMenu.style.opacity = "1";
+    settingsMenu.style.transform = "translateY(0)";
+    settingsMenu.style.pointerEvents = "auto";
+
+    // показываем контролы на всякий случай
+    showControls();
+  }
+});
+
+// --- клик по странице скрывает меню ---
+document.addEventListener("click", () => {
+  if (settingsMenu.classList.contains("open")) {
+    settingsMenu.classList.remove("open");
+    settingsMenu.style.opacity = "0";
+    settingsMenu.style.transform = "translateY(20px)";
+    settingsMenu.style.pointerEvents = "none";
+  }
+});
+
+// --- не закрывать меню при клике по нему ---
+settingsMenu.addEventListener("click", (e) => e.stopPropagation());
 
 // play/pause
 const playPauseIcon = document.getElementById("playPauseIcon");
