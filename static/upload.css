@@ -1,14 +1,49 @@
-body {
-  font-family: Arial, sans-serif;
-  margin: 0;
-  background: #121212;
-  color: #fff;
+:root {
+  --bg: #0f1115;
+  --card: #171a21;
+  --text: #e6e6e6;
+  --muted: #9aa4b2;
+  --accent: #4f7cff;
+  --accent-hover: #3b66ff;
 }
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: Inter, system-ui, Arial, sans-serif;
+}
+
+h1 {
+  text-align: center;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
 header {
   position: fixed;
   top: 0;
   width: 100%;
   z-index: 1000;
+}
+
+body {
+  background: radial-gradient(circle at top, #1a1f2e, var(--bg));
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 200px;
+}
+
+.container {
+  width: 490px;
+  background: var(--card);
+  padding: 20px;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  flex-direction: column;
 }
 
 nav {
@@ -22,7 +57,8 @@ nav {
   -webkit-backdrop-filter: blur(12px);
 
   background: rgba(255, 255, 255, 0.05); /* почти прозрачная */
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  /* border-bottom: 1px solid rgba(255, 255, 255, 0.1); */
+  border-bottom: none;
 }
 
 .nav-links {
@@ -81,18 +117,52 @@ nav {
   text-decoration: underline;
 }
 
-.container {
-  padding: 20px;
+input[type="file"] {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #2a2f3a;
+  background: #0e121a;
+  color: var(--text);
+  outline: none;
+  transition: 0.2s;
 }
 
-input,
-button {
-  display: block;
-  margin: 10px 0;
-  padding: 10px;
+input[type="file"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.15);
+}
+
+input[type="text"] {
   width: 100%;
-  max-width: 500px;
-  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #2a2f3a;
+  background: #0e121a;
+  color: var(--text);
+  outline: none;
+  transition: 0.2s;
+}
+
+input[type="text"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.15);
+}
+
+input[type="range"] {
+  width: 100%;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px; /* ← идеально для отступа */
+}
+
+.form-thumb {
+  display: flex;
+  flex-direction: column;
+  gap: 6px; /* ← идеально для отступа */
 }
 
 button {
@@ -104,6 +174,13 @@ button {
   transition:
     opacity 0.5s ease,
     transform 0.5s ease;
+  border-radius: 5px;
+  display: block;
+  margin: 10px 0;
+  padding: 10px;
+  width: 100%;
+  max-width: 500px;
+  box-sizing: border-box;
 }
 
 button:hover {

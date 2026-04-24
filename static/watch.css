@@ -1,9 +1,15 @@
-body {
-  font-family: Arial, sans-serif;
+* {
   margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: Inter, system-ui, Arial, sans-serif;
+}
+
+body {
   background: #121212;
   color: #fff;
 }
+
 header {
   position: fixed;
   top: 0;
@@ -417,6 +423,9 @@ video {
   align-items: center;
   gap: 10px;
   cursor: pointer;
+
+  border-radius: 8px; /* скругление */
+  transition: background 0.2s ease;
 }
 
 .settings-item:hover {
@@ -638,11 +647,11 @@ video {
   }
 
   .settings-item {
-    padding: 6px 14px;
+    padding: 5px 14px;
   }
 
   .settings-quality {
-    padding: 6px 14px 6px 40px; /* верх/право/низ/лево — левый оставляем 40px для галочки */
+    padding: 5px 14px 5px 40px; /* верх/право/низ/лево — левый оставляем 40px для галочки */
     display: flex;
     align-items: center;
     gap: 10px;

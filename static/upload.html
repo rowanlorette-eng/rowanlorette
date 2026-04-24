@@ -4,9 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Umbrella Upload</title>
-    <link rel="stylesheet" href="upload.css" />
-  </head>
-  <body>
     <header>
       <nav>
         <div class="logo">Umbrella</div>
@@ -17,6 +14,9 @@
         </div>
       </nav>
     </header>
+    <link rel="stylesheet" href="upload.css" />
+  </head>
+  <body>
     <div class="container">
       <h1>Upload video</h1>
 
@@ -31,17 +31,21 @@
       </div>
 
       <div id="meta" class="meta" style="display: none">
-        <label>Название видео:</label>
-        <input id="title" type="text" />
+        <div class="form-group">
+          <label>Название видео:</label>
+          <input id="title" type="text" />
+        </div>
 
         <div class="duration">
           <span>Длительность: </span><span id="durationText">00:00</span>
         </div>
 
-        <label>Выберите кадр для превью:</label>
-        <input id="thumbSlider" type="range" min="0" max="100" value="0" />
-        <div class="thumbInfo">
-          <span>Время превью: </span><span id="thumbTime">00:00</span>
+        <div class="form-thumb">
+          <label>Выберите кадр для превью:</label>
+          <input id="thumbSlider" type="range" min="0" max="100" value="0" />
+          <div class="thumbInfo">
+            <span>Время превью: </span><span id="thumbTime">00:00</span>
+          </div>
         </div>
 
         <div class="thumbPreview">

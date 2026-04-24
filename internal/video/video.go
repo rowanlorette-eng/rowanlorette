@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -679,22 +680,108 @@ func getVideoDuration(input string) (float64, error) {
 }
 
 func Stream(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/api/stream/")
-	clean := filepath.Clean(path)
-
-	if strings.Contains(clean, "..") {
-		http.Error(w, "forbidden", http.StatusForbidden)
+	// Разрешаем только GET и HEAD (стриминг + preload)
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	full := filepath.Join(VIDEOPATH, clean)
+	const prefix = "/api/stream/"
 
-	if _, err := os.Stat(full); err != nil {
+	// Проверяем корректность маршрута
+	if !strings.HasPrefix(r.URL.Path, prefix) {
 		http.NotFound(w, r)
 		return
 	}
 
-	http.ServeFile(w, r, full)
+	// Получаем относительный путь
+	rel := strings.TrimPrefix(r.URL.Path, prefix)
+
+	// Запрещаем пустой путь (иначе уходит в директорию)
+	if rel == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Нормализуем URL-путь (важно: path, не filepath)
+	rel = path.Clean(rel)
+
+	// Защита от "out of scope"
+	if rel == "." || rel == "/" {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Запрещаем абсолютные пути
+	if strings.HasPrefix(rel, "/") {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	base := filepath.Clean(VIDEOPATH)
+	full := filepath.Join(base, filepath.FromSlash(rel))
+
+	// Жёсткая проверка: нельзя выйти за VIDEOPATH
+	relCheck, err := filepath.Rel(base, full)
+	if err != nil || strings.HasPrefix(relCheck, "..") {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Проверка существования файла
+	info, err := os.Stat(full)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Запрещаем директории
+	if info.IsDir() {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Разрешённые форматы (HLS + видео + превью)
+	ext := strings.ToLower(filepath.Ext(info.Name()))
+	switch ext {
+	case ".mp4", ".webm", ".mov", ".mkv", ".mp3",
+		".m3u8", ".ts",
+		".jpg", ".jpeg", ".png", ".webp":
+	default:
+		http.Error(w, "unsupported file type", http.StatusForbidden)
+		return
+	}
+
+	// MIME-типы для HLS (важно для плееров)
+	switch ext {
+	case ".m3u8":
+		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+	case ".ts":
+		w.Header().Set("Content-Type", "video/mp2t")
+	}
+
+	// Поддержка range-запросов (перемотка видео)
+	w.Header().Set("Accept-Ranges", "bytes")
+
+	// Безопасная отдача файла с поддержкой range
+	f, err := os.Open(full)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer f.Close()
+
+	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+}
+
+// безопасное открытие файла (чтобы не дублировать код)
+func mustOpen(path string) *os.File {
+	f, err := os.Open(path)
+	if err != nil {
+		// сюда не должны попадать, т.к. Stat уже проверили
+		panic(err)
+	}
+	return f
 }
 
 func UploadStartHandler(storage *sqlite.Storage) http.HandlerFunc {
