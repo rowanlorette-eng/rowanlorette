@@ -15,26 +15,77 @@ const encodeStatus = document.getElementById("encodeStatus");
 const encodeText = document.getElementById("encodeText");
 
 const encodeWrapper = document.getElementById("encodeStatus");
-const stage1080 = document.getElementById("stage1080");
-const stage2160 = document.getElementById("stage2160");
 
-function finalizeStages() {
-  // Завершаем оба stageBox
-  stage1080.classList.remove("active");
-  stage1080.classList.add("done");
+const stagesContainer = document.getElementById("stages");
 
-  stage2160.classList.remove("active");
-  stage2160.classList.add("done");
+let stageMap = {}; // id → DOM элемент
+let stagesOrder = []; // порядок стадий
+let stagesInitialized = false;
 
-  // Скрываем заголовок encodeTitle
-  const title = document.querySelector(".encodeTitle");
-  title.style.opacity = "0";
-  title.style.height = "0";
-  title.style.margin = "0";
-  title.style.overflow = "hidden";
+// безопасный рендер стадий
+function renderStages(stages) {
+  if (!Array.isArray(stages)) return;
+
+  stagesContainer.innerHTML = "";
+  stageMap = {};
+  stagesOrder = [];
+
+  stages.forEach((stage) => {
+    if (!stage || !stage.id) return;
+
+    const div = document.createElement("div");
+    div.className = "stageBox";
+    div.textContent = stage.label || stage.id;
+
+    stagesContainer.appendChild(div);
+
+    stageMap[stage.id] = div;
+    stagesOrder.push(stage.id);
+  });
+
+  stagesInitialized = true;
 }
 
-let encodeStage = "1080"; // или 2160
+// универсальное применение стадии
+function applyStage(currentStage) {
+  if (!stagesInitialized) return;
+
+  let reachedCurrent = false;
+
+  for (let i = 0; i < stagesOrder.length; i++) {
+    const id = stagesOrder[i];
+    const el = stageMap[id];
+    if (!el) continue;
+
+    if (id === currentStage) {
+      el.classList.add("active");
+      el.classList.remove("done");
+      reachedCurrent = true;
+    } else if (!reachedCurrent) {
+      el.classList.remove("active");
+      el.classList.add("done");
+    } else {
+      el.classList.remove("active");
+      el.classList.remove("done");
+    }
+  }
+}
+
+// завершение всех стадий
+function finalizeStages() {
+  Object.values(stageMap).forEach((el) => {
+    el.classList.remove("active");
+    el.classList.add("done");
+  });
+
+  const title = document.querySelector(".encodeTitle");
+  if (title) {
+    title.style.opacity = "0";
+    title.style.height = "0";
+    title.style.margin = "0";
+    title.style.overflow = "hidden";
+  }
+}
 
 let currentId = null;
 let fileDuration = 0;
@@ -252,103 +303,83 @@ saveBtn.onclick = async () => {
   d.append("title", titleInput.value);
   d.append("thumb_time", selectedThumbTime.toString());
 
-  const res = await fetch("/api/publish", { method: "POST", body: d });
-  const txt = await res.text();
+  try {
+    const res = await fetch("/api/publish", { method: "POST", body: d });
+    const txt = await res.text();
 
-  if (txt !== "ok") {
-    status.innerText = "Ошибка публикации";
+    if (txt !== "ok") {
+      status.innerText = "Ошибка публикации";
+      saveBtn.disabled = false;
+      return;
+    }
+  } catch (e) {
+    status.innerText = "Ошибка сети";
     saveBtn.disabled = false;
     return;
   }
 
   status.innerText = "Видео отправлено на обработку...";
   encodeStatus.style.display = "block";
-
-  encodeStage = "1080";
-  encodeStartTime = Date.now();
-
   encodeWrapper.style.display = "block";
-  stage1080.classList.add("active");
   bar.style.width = "30%";
 
-  // скрываем save кнопку
   saveBtn.style.display = "none";
 
-  // проверяем статус каждые сек
-
-  const applyStage = (stage) => {
-    // 1080p активна
-    if (stage === "1080") {
-      stage1080.classList.add("active");
-      stage1080.classList.remove("done");
-    }
-
-    // 1080p завершена, если стадия дальше
-    if (["1080_done", "2160", "done"].includes(stage)) {
-      stage1080.classList.remove("active");
-      stage1080.classList.add("done");
-      stage2160.style.display = "block"; // показываем 2160p
-    }
-
-    // 2160p активна
-    if (stage === "2160") {
-      stage2160.classList.add("active");
-      stage2160.classList.remove("done");
-    }
-
-    // 2160p и финал
-    if (stage === "done") {
-      finalizeStages(); // теперь 2160p тоже завершается
-    }
-  };
-
   let stopped = false;
-
   window.addEventListener("beforeunload", () => {
     stopped = true;
   });
 
   while (!stopped) {
-    const r = await fetch(`/api/video/${currentId}`);
+    let data;
 
-    if (!r.ok) {
-      status.innerText = "Ошибка связи с сервером";
+    try {
+      const r = await fetch(`/api/video-status/${currentId}`);
+      if (!r.ok) {
+        status.innerText = "Ошибка связи с сервером";
+        break;
+      }
+      data = await r.json();
+    } catch (e) {
+      status.innerText = "Ошибка сети";
       break;
     }
 
-    const data = await r.json();
+    // инициализация стадий один раз
+    if (Array.isArray(data.stages) && data.stages.length > 0) {
+      const newIds = data.stages.map((s) => s.id).join(",");
+      const oldIds = stagesOrder.join(",");
 
+      // если стадии изменились → перерендер
+      if (!stagesInitialized || newIds !== oldIds) {
+        renderStages(data.stages);
+      }
+    }
+
+    // готово
     if (data.status === "ready") {
-      // скрываем только заголовок
-      const title = document.querySelector(".encodeTitle");
-      title.style.opacity = "0";
-      title.style.height = "0";
-      title.style.margin = "0";
-      title.style.overflow = "hidden";
-
       status.innerText = "Видео обработано успешно!";
-      //encodeText.innerText = "Обработка завершена ✔";
       bar.style.width = "100%";
 
       watchBtn.style.display = "block";
       watchBtn.onclick = () => {
-        // ставим флаг автопроигрывания
         sessionStorage.setItem("autoplay", "1");
-        // переходим на страницу просмотра
         location.href = `watch.html?v=${currentId}`;
       };
+
       finalizeStages();
       return;
     }
 
+    // ошибка
     if (data.status === "error") {
       status.innerText = "Ошибка транскодинга. Попробуйте другое видео.";
       bar.style.width = "0%";
       return;
     }
 
-    // processing
-    if (data.progress && data.progress > 0) {
+    // прогресс
+    if (data.progress >= 0) {
       status.innerText = `Обработка: ${data.progress}%`;
       bar.style.width = data.progress + "%";
     } else {
@@ -356,9 +387,10 @@ saveBtn.onclick = async () => {
       bar.style.width = "60%";
     }
 
-    console.log("STAGE:", data.stage);
-
-    applyStage(data.stage);
+    // стадия
+    if (data.current_stage) {
+      applyStage(data.current_stage);
+    }
 
     await new Promise((r) => setTimeout(r, 3000));
   }

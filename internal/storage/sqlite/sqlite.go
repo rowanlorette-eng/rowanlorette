@@ -20,6 +20,8 @@ type Video struct {
 	Description string
 	Progress    int
 	Stage       string
+	Width       int
+	Height      int
 }
 
 // Инициализация базы
@@ -239,4 +241,14 @@ func (s *Storage) SetVideoUploaded(id, filename string) error {
 	}
 
 	return nil
+}
+
+func (s *Storage) SetVideoMeta(id string, width, height int) error {
+	_, err := s.DB.Exec(`
+        UPDATE videos
+        SET width = ?, height = ?
+        WHERE id = ?
+    `, width, height, id)
+
+	return err
 }

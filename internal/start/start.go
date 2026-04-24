@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"umbrella/internal/config"
 	"umbrella/internal/storage/sqlite"
+	"umbrella/internal/upload"
 	"umbrella/internal/video"
 )
 
@@ -36,13 +37,19 @@ func Register(mux *http.ServeMux, storage *sqlite.Storage) {
 	mux.HandleFunc("/api/videos", video.ListVideos(storage))
 	mux.HandleFunc("/api/random", video.RandomVideoHandler(storage))
 	//mux.HandleFunc("/api/upload", video.UploadHandler(storage))
-	mux.HandleFunc("/api/publish", video.PublishHandler(storage))
-	mux.Handle("/api/upload/start", video.UploadStartHandler(storage))
-	mux.Handle("/api/upload/chunk", video.UploadChunkHandler())
-	mux.Handle("/api/upload/finish", video.UploadFinishHandler(storage))
+	//mux.HandleFunc("/api/publish", video.PublishHandler(storage))
+	//mux.Handle("/api/upload/start", video.UploadStartHandler(storage))
+	//mux.Handle("/api/upload/chunk", video.UploadChunkHandler())
+	//mux.Handle("/api/upload/finish", video.UploadFinishHandler(storage))
 	mux.HandleFunc("/api/video/", video.GetVideoHandler(storage))
 	mux.HandleFunc("/api/delete/", video.DeleteVideoHandler(storage))
 	mux.HandleFunc("/api/stream/", video.Stream)
+
+	mux.HandleFunc("/api/video-status/", upload.VideoStatusHandler(storage))
+	mux.HandleFunc("/api/upload/finish", upload.UploadFinishHandler(storage))
+	mux.HandleFunc("/api/publish", upload.PublishHandler(storage))
+	mux.Handle("/api/upload/start", upload.UploadStartHandler(storage))
+	mux.Handle("/api/upload/chunk", upload.UploadChunkHandler())
 }
 
 func serveWatch(w http.ResponseWriter, r *http.Request) {
