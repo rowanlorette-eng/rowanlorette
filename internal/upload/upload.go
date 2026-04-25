@@ -35,17 +35,16 @@ type Quality struct {
 	Height int    // 1080
 }
 
-// полный список (можешь расширять до 8K)
 var AllQualities = []Quality{
-	{"144", "144p", 144},
-	{"240", "240p", 240},
-	{"360", "360p", 360},
-	{"480", "480p", 480},
-	{"720", "720p", 720},
-	{"1080", "1080p", 1080},
-	{"1440", "1440p", 1440},
-	{"2160", "2160p", 2160},
 	{"4320", "4320p", 4320},
+	{"2160", "2160p", 2160},
+	{"1440", "1440p", 1440},
+	{"1080", "1080p", 1080},
+	{"720", "720p", 720},
+	{"480", "480p", 480},
+	{"360", "360p", 360},
+	{"240", "240p", 240},
+	{"144", "144p", 144},
 }
 
 func writeJSONError(w http.ResponseWriter, status int, msg string) {
@@ -62,14 +61,12 @@ type StageDTO struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
 }
-
 type VideoAPIResponse struct {
 	Stages       []StageDTO `json:"stages"`
 	CurrentStage string     `json:"current_stage"`
 	Status       string     `json:"status"`
 	Progress     int        `json:"progress"`
 }
-
 type ffprobeOutput struct {
 	Format struct {
 		Tags map[string]string `json:"tags"`
@@ -122,8 +119,21 @@ var ffmpegVideoArgs = map[string][]string{
 }
 
 func selectQualitiesByHeight(h int) []Quality {
-	// < 1080 → только исходное
-	if h < 1080 {
+	if h <= 0 {
+		return nil
+	}
+
+	result := make([]Quality, 0, len(AllQualities))
+
+	// берём только те качества, которые <= исходного видео
+	for _, q := range AllQualities {
+		if q.Height <= h {
+			result = append(result, q)
+		}
+	}
+
+	// если вдруг ничего не подошло (очень маленькое видео, например 100p)
+	if len(result) == 0 {
 		return []Quality{
 			{
 				ID:     strconv.Itoa(h),
@@ -133,44 +143,7 @@ func selectQualitiesByHeight(h int) []Quality {
 		}
 	}
 
-	// >=1080 → всегда 1080 + максимум
-	var result []Quality
-
-	// всегда 1080
-	result = append(result, Quality{"1080", "1080p", 1080})
-
-	// максимум
-	if h >= 2160 {
-		result = append(result, Quality{"2160", "2160p", 2160})
-	} else if h >= 1440 {
-		result = append(result, Quality{"1440", "1440p", 1440})
-	}
-
 	return result
-}
-
-func getVideoHeight(input string) (int, error) {
-	cmd := exec.Command(
-		"ffprobe",
-		"-v", "error",
-		"-select_streams", "v:0",
-		"-show_entries", "stream=height",
-		"-of", "default=noprint_wrappers=1:nokey=1",
-		input,
-	)
-
-	out, err := cmd.Output()
-	if err != nil {
-		return 0, err
-	}
-
-	h, err := strconv.Atoi(strings.TrimSpace(string(out)))
-	if err != nil {
-		return 0, err
-	}
-	log.Println("VIDEO HEIGHT:", h)
-
-	return h, nil
 }
 
 func getVideoResolution(input string) (width int, height int, err error) {
@@ -443,6 +416,17 @@ func UploadFinishHandler(storage *sqlite.Storage) http.HandlerFunc {
 		}
 		os.RemoveAll(chunks)
 
+		width, height, err := getVideoResolution(input)
+		if err != nil {
+			log.Println("ffprobe resolution error:", err)
+			height = 1080
+			width = 1920
+		}
+
+		if err := storage.SetVideoMeta(req.ID, width, height); err != nil {
+			log.Println("SetVideoMeta error:", err)
+		}
+
 		// --- сохраняем запись в БД ---
 		if err := storage.SetVideoUploaded(req.ID, req.Filename); err != nil {
 			http.Error(w, "db error", 500)
@@ -532,17 +516,6 @@ func UploadFinishHandler(storage *sqlite.Storage) http.HandlerFunc {
 				http.Error(w, "thumbnail failed", 500)
 				return
 			}
-		}
-
-		width, height, err := getVideoResolution(input)
-		if err != nil {
-			log.Println("ffprobe resolution error:", err)
-			height = 1080
-			width = 1920
-		}
-
-		if err := storage.SetVideoMeta(req.ID, width, height); err != nil {
-			log.Println("SetVideoMeta error:", err)
 		}
 
 		// --- обновляем описание асинхронно ---
@@ -794,10 +767,14 @@ func getDefaultCover() string {
 func runFFmpeg(args []string) error {
 	cmd := exec.Command("ffmpeg", args...)
 	out, err := cmd.CombinedOutput()
+
 	if err != nil {
-		log.Println("FFMPEG ERROR:", string(out))
-		return err
+		log.Println("FFMPEG FAILED")
+		log.Println("ARGS:", args)
+		log.Println("OUTPUT:", string(out))
+		return fmt.Errorf("ffmpeg error: %w", err)
 	}
+
 	return nil
 }
 

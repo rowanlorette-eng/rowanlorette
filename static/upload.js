@@ -304,7 +304,7 @@ saveBtn.onclick = async () => {
   d.append("thumb_time", selectedThumbTime.toString());
 
   try {
-    const res = await fetch("/api/publish", { method: "POST", body: d });
+    const res = await fetch("/api/upload/publish", { method: "POST", body: d });
     const txt = await res.text();
 
     if (txt !== "ok") {
