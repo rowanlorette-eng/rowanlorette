@@ -13,15 +13,16 @@ type Storage struct {
 }
 
 type Video struct {
-	ID          string
-	Title       string
-	Status      string
-	Thumbnail   string
-	Description string
-	Progress    int
-	Stage       string
-	Width       int
-	Height      int
+	ID           string
+	Title        string
+	Status       string
+	Thumbnail    string
+	Description  string
+	Progress     int
+	Stage        string
+	Width        int
+	Height       int
+	AllQualities bool
 }
 
 // Инициализация базы
@@ -43,7 +44,10 @@ func Init(storagePath string) (*Storage, error) {
 	description TEXT,
 	progress INTEGER DEFAULT 0,
 	stage TEXT DEFAULT '',
-	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	width INTEGER DEFAULT 0,
+	height INTEGER DEFAULT 0,
+	all_qualities INTEGER DEFAULT 0
 	)`); err != nil {
 		return nil, fmt.Errorf("init: failed to create videos table in sqlite database at %s: %w", storagePath, err)
 	}
@@ -98,7 +102,7 @@ func (s *Storage) GetVideo(id string) (*Video, error) {
 	var thumb sql.NullString
 
 	row := s.DB.QueryRow(`
-		SELECT title, status, thumbnail, description, progress, stage
+		SELECT title, status, thumbnail, description, progress, stage, all_qualities
 		FROM videos
 		WHERE id = ?
 	`, id)
@@ -106,12 +110,17 @@ func (s *Storage) GetVideo(id string) (*Video, error) {
 	var v Video
 	v.ID = id
 
-	err := row.Scan(&v.Title, &v.Status, &thumb, &desc, &v.Progress, &stage)
+	var allQual sql.NullInt64
+
+	err := row.Scan(&v.Title, &v.Status, &thumb, &desc, &v.Progress, &stage, &allQual)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("GetVideo scan failed: %w", err)
+	}
+	if allQual.Valid && allQual.Int64 == 1 {
+		v.AllQualities = true
 	}
 
 	if thumb.Valid {
@@ -249,6 +258,21 @@ func (s *Storage) SetVideoMeta(id string, width, height int) error {
         SET width = ?, height = ?
         WHERE id = ?
     `, width, height, id)
+
+	return err
+}
+
+func (s *Storage) SetVideoAllQualities(id string, all bool) error {
+	val := 0
+	if all {
+		val = 1
+	}
+
+	_, err := s.DB.Exec(`
+        UPDATE videos
+        SET all_qualities = ?
+        WHERE id = ?
+    `, val, id)
 
 	return err
 }

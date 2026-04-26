@@ -118,28 +118,51 @@ var ffmpegVideoArgs = map[string][]string{
 	},
 }
 
-func selectQualitiesByHeight(h int) []Quality {
+func selectQualitiesByHeight(h int, all bool) []Quality {
 	if h <= 0 {
 		return nil
 	}
 
-	result := make([]Quality, 0, len(AllQualities))
-
-	// берём только те качества, которые <= исходного видео
+	// собираем доступные (<= исходного)
+	var available []Quality
 	for _, q := range AllQualities {
 		if q.Height <= h {
-			result = append(result, q)
+			available = append(available, q)
 		}
 	}
 
-	// если вдруг ничего не подошло (очень маленькое видео, например 100p)
-	if len(result) == 0 {
+	if len(available) == 0 {
 		return []Quality{
 			{
 				ID:     strconv.Itoa(h),
 				Label:  fmt.Sprintf("%dp", h),
 				Height: h,
 			},
+		}
+	}
+
+	// === РЕЖИМ 1: полный ladder ===
+	if all {
+		return available
+	}
+
+	// === РЕЖИМ 2: экономный ===
+	// max + 1080 (если есть)
+
+	max := available[0] // у тебя список уже отсортирован сверху вниз
+
+	result := []Quality{max}
+
+	// если максимум уже 1080 или ниже — больше ничего не нужно
+	if max.Height <= 1080 {
+		return result
+	}
+
+	// ищем 1080
+	for _, q := range available {
+		if q.Height == 1080 {
+			result = append(result, q)
+			break
 		}
 	}
 
@@ -327,6 +350,7 @@ func PublishHandler(storage *sqlite.Storage) http.HandlerFunc {
 		id := r.FormValue("id")
 		title := r.FormValue("title")
 		thumbTime := r.FormValue("thumb_time")
+		allQualities := r.FormValue("all_qualities") == "1"
 
 		if id == "" || title == "" || thumbTime == "" {
 			writeJSONError(w, http.StatusBadRequest, "missing parameters")
@@ -348,8 +372,13 @@ func PublishHandler(storage *sqlite.Storage) http.HandlerFunc {
 		}
 
 		// запускаем pipeline
+		// сохраняем в БД
+		if err := storage.SetVideoAllQualities(id, allQualities); err != nil {
+			log.Println("SetVideoAllQualities error:", err)
+		}
+
 		go func() {
-			err := Transcode(storage, id, input, dir, thumbTime)
+			err := Transcode(storage, id, input, dir, thumbTime, allQualities)
 			if err != nil {
 				log.Println("TRANSCODE ERROR:", err)
 				storage.SetVideoError(id)
@@ -402,7 +431,13 @@ func UploadFinishHandler(storage *sqlite.Storage) http.HandlerFunc {
 				http.Error(w, "missing chunk "+strconv.Itoa(i), 400)
 				return
 			}
-			in, _ := os.Open(part)
+			in, err := os.Open(part)
+			if err != nil {
+				out.Close()
+				os.Remove(tmp)
+				http.Error(w, "cannot open chunk", 500)
+				return
+			}
 			io.CopyBuffer(out, in, buf)
 			in.Close()
 		}
@@ -492,30 +527,12 @@ func UploadFinishHandler(storage *sqlite.Storage) http.HandlerFunc {
 				return
 			}
 
-			// --- создаём thumbnail для аудио ---
-			thumbPath := filepath.Join(dir, "thumb.jpg")
-			thumbCmd := exec.Command("ffmpeg", "-y", "-i", cover, "-frames:v", "1", "-q:v", "2", thumbPath)
-			if out, err := thumbCmd.CombinedOutput(); err != nil {
-				log.Println("thumbnail failed:", string(out), err)
-				storage.SetVideoError(req.ID)
-				http.Error(w, "thumbnail failed", 500)
-				return
-			}
-
 			// --- удаляем временную cover.jpg если была создана ---
 			if cover != getDefaultCover() {
 				os.Remove(cover)
 			}
 		} else {
-			// --- thumbnail для видео ---
-			thumbPath := filepath.Join(dir, "thumb.jpg")
-			thumbCmd := exec.Command("ffmpeg", "-y", "-ss", "0", "-i", input, "-frames:v", "1", "-q:v", "2", thumbPath)
-			if out, err := thumbCmd.CombinedOutput(); err != nil {
-				log.Println("thumbnail failed:", string(out), err)
-				storage.SetVideoError(req.ID)
-				http.Error(w, "thumbnail failed", 500)
-				return
-			}
+
 		}
 
 		// --- обновляем описание асинхронно ---
@@ -573,11 +590,22 @@ func VideoStatusHandler(storage *sqlite.Storage) http.HandlerFunc {
 				}
 			}
 		}
-		if maxHeight == 0 {
-			maxHeight = 1080
+		if maxHeight <= 0 {
+			resp := VideoAPIResponse{
+				Stages:       []StageDTO{},
+				CurrentStage: "",
+				Status:       v.Status,
+				Progress:     v.Progress,
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+			return
 		}
 		// генерируем стадии
-		qualities := selectQualitiesByHeight(maxHeight)
+		all := v.AllQualities
+
+		qualities := selectQualitiesByHeight(maxHeight, all)
 
 		stages := make([]StageDTO, 0, len(qualities))
 		for _, q := range qualities {
@@ -604,7 +632,7 @@ func VideoStatusHandler(storage *sqlite.Storage) http.HandlerFunc {
 	}
 }
 
-func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error {
+func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string, all bool) error {
 	// --- validate input ---
 	if !fileExists(input) {
 		storage.SetVideoError(id)
@@ -644,7 +672,7 @@ func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error 
 	log.Println("PROFILE:", profile)
 
 	// выбираем качества
-	qualities := selectQualitiesByHeight(height)
+	qualities := selectQualitiesByHeight(height, all)
 
 	// обработка всех качеств
 	for i, q := range qualities {
@@ -713,12 +741,24 @@ func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error 
 
 	f.WriteString("#EXTM3U\n")
 
+	//for _, q := range qualities {
+	//	bw := q.Height * q.Height * 10
+	//	aspect := float64(width) / float64(height)
+	//	w := int(float64(q.Height) * aspect)
+	//
+	//	f.WriteString(fmt.Sprintf(
+	//		"#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=%dx%d\n%s/index.m3u8\n",
+	//		bw,
+	//		w,
+	//		q.Height,
+	//		q.ID,
+	//	))
+	//}
+
 	for _, q := range qualities {
 		f.WriteString(fmt.Sprintf(
 			"#EXT-X-STREAM-INF:BANDWIDTH=8000000,RESOLUTION=0x%d\n%s/index.m3u8\n",
-			q.Height,
-			q.ID,
-		))
+			q.Height, q.ID))
 	}
 
 	// =======================
@@ -744,6 +784,11 @@ func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string) error 
 
 	// cleanup
 	defer os.Remove(input)
+
+	if len(qualities) == 0 {
+		storage.SetVideoError(id)
+		return fmt.Errorf("no qualities generated")
+	}
 
 	last := qualities[len(qualities)-1].ID
 	storage.SetVideoStage(id, last, 100)

@@ -18,6 +18,8 @@ const encodeWrapper = document.getElementById("encodeStatus");
 
 const stagesContainer = document.getElementById("stages");
 
+const allQualitiesCheckbox = document.getElementById("allQualities");
+
 let stageMap = {}; // id → DOM элемент
 let stagesOrder = []; // порядок стадий
 let stagesInitialized = false;
@@ -302,6 +304,7 @@ saveBtn.onclick = async () => {
   d.append("id", currentId);
   d.append("title", titleInput.value);
   d.append("thumb_time", selectedThumbTime.toString());
+  d.append("all_qualities", allQualitiesCheckbox.checked ? "1" : "0");
 
   try {
     const res = await fetch("/api/upload/publish", { method: "POST", body: d });
