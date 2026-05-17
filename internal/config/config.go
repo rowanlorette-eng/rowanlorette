@@ -15,6 +15,7 @@ type Config struct {
 	StaticPath    string     `yaml:"static"`
 	VideosPath    string     `yaml:"videos"`
 	FFmpegProfile string     `yaml:"ffmpeg_profile"`
+	FFmpegPATH    string     `yaml:"ffmpeg_path"`
 	HTTPServer    HTTPServer `yaml:"http_server"`
 }
 

@@ -3,6 +3,7 @@ storage_path: "data.db"
 static: "./static"
 videos: "videos"
 ffmpeg_profile: "nvidia" #// cpu intel nvidia h265_nvenc amd_vaapi amd_amf
+ffmpeg_path: "ffmpeg" #// "ffmpeg"
 http_server:
   address: "localhost"
   port: "8089"

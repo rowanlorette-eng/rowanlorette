@@ -28,6 +28,7 @@ const muteBtn = document.getElementById("muteBtn");
 const buffer = document.getElementById("buffer");
 const controls = document.getElementById("controls");
 const videoWrapper = document.getElementById("videoWrapper");
+const loader = document.getElementById("loader");
 const settingsBtn = document.getElementById("settingsBtn");
 const settingsMenu = document.getElementById("settingsMenu");
 const qualityBtn = document.getElementById("qualityBtn");
@@ -286,6 +287,7 @@ async function load() {
   }
   player.src = "";
   audioPlayer.src = "";
+  showLoader();
 
   if (Hls.isSupported()) {
     hlsInstance = new Hls();
@@ -293,6 +295,7 @@ async function load() {
     hlsInstance.attachMedia(player);
 
     hlsInstance.on(Hls.Events.MANIFEST_PARSED, async () => {
+      hideLoader();
       populateQualityMenu(hlsInstance.levels);
 
       if (shouldAutoplayNow()) {
@@ -627,6 +630,48 @@ player.onclick = () => {
   else player.pause();
 };
 
+// ===== SMART LOADER CONTROL =====
+
+let isBuffering = false;
+let hasFirstFrame = false;
+let loaderTimer = null;
+
+function showLoaderSmart() {
+  clearTimeout(loaderTimer);
+
+  loaderTimer = setTimeout(() => {
+    if (!hasFirstFrame || isBuffering) {
+      loader.style.display = "block";
+    }
+  }, 150);
+}
+
+function hideLoaderSmart() {
+  clearTimeout(loaderTimer);
+  loader.style.display = "none";
+}
+
+player.addEventListener("loadstart", () => {
+  hasFirstFrame = false;
+  isBuffering = true;
+  showLoaderSmart();
+});
+
+player.addEventListener("loadeddata", () => {
+  hasFirstFrame = true;
+  hideLoaderSmart();
+});
+
+player.addEventListener("waiting", () => {
+  isBuffering = true;
+  showLoaderSmart();
+});
+
+player.addEventListener("playing", () => {
+  isBuffering = false;
+  hideLoaderSmart();
+});
+
 // события плеера
 player.onpause = () => {
   overlay.style.display = "flex";
@@ -736,6 +781,14 @@ function updateBuffer() {
   if (!buffered.length || !duration) return;
   const end = buffered.end(buffered.length - 1);
   buffer.style.width = (end / duration) * 100 + "%";
+}
+
+function showLoader() {
+  loader.style.display = "block";
+}
+
+function hideLoader() {
+  loader.style.display = "none";
 }
 
 // ----------------- AUDIO PLAYER -----------------

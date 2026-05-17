@@ -23,6 +23,7 @@ import (
 var VIDEOPATH = config.CFG.VideosPath
 var STATICPATH = config.CFG.StaticPath
 var MODE = config.CFG.FFmpegProfile
+var FFMPATH = config.CFG.FFmpegPATH
 
 func init() {
 	mime.AddExtensionType(".m3u8", "application/vnd.apple.mpegurl")
@@ -175,7 +176,7 @@ func getVideoResolution(input string) (width int, height int, err error) {
 		"-v", "error",
 		"-select_streams", "v:0",
 		"-show_entries", "stream=width,height",
-		"-of", "csv=p=0:s=x",
+		"-of", "csv=s=x:p=0", // s=x задает разделитель 'x'
 		input,
 	)
 
@@ -184,22 +185,31 @@ func getVideoResolution(input string) (width int, height int, err error) {
 		return 0, 0, err
 	}
 
-	parts := strings.Split(strings.TrimSpace(string(out)), "x")
-	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf("invalid resolution output: %s", string(out))
+	// 1. Убираем пробелы и переносы строк
+	cleanOut := strings.TrimSpace(string(out))
+
+	// 2. Если в конце затесался 'x', убираем его
+	cleanOut = strings.TrimSuffix(cleanOut, "x")
+
+	// 3. Разбиваем строку
+	parts := strings.Split(cleanOut, "x")
+
+	// Логируем для отладки, что именно мы получили
+	if len(parts) < 2 {
+		return 0, 0, fmt.Errorf("invalid resolution output: '%s'", cleanOut)
 	}
 
-	w, err := strconv.Atoi(parts[0])
+	w, err := strconv.Atoi(strings.TrimSpace(parts[0]))
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("invalid width '%s': %v", parts[0], err)
 	}
 
-	h, err := strconv.Atoi(parts[1])
+	h, err := strconv.Atoi(strings.TrimSpace(parts[1]))
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("invalid height '%s': %v", parts[1], err)
 	}
 
-	log.Println("VIDEO RESOLUTION:", w, "x", h)
+	log.Printf("VIDEO RESOLUTION: %d x %d", w, h)
 
 	return w, h, nil
 }
@@ -474,17 +484,34 @@ func UploadFinishHandler(storage *sqlite.Storage) http.HandlerFunc {
 
 		if isAudio {
 			tmpVideo := filepath.Join(dir, "tmp_input.mp4")
+			// Целевой путь, где фронтенд ожидает увидеть обложку
+			finalCoverPath := filepath.Join(dir, "thumb.jpg")
 
 			// --- пытаемся извлечь обложку из аудио ---
-			cover := filepath.Join(dir, "cover.jpg")
-			extractCmd := exec.Command("ffmpeg", "-y", "-i", input, "-an", "-vcodec", "copy", cover)
-			if _, err := extractCmd.CombinedOutput(); err != nil || !fileExists(cover) {
-				// если извлечение не удалось, используем дефолт
-				cover = getDefaultCover()
-				if !fileExists(cover) {
-					log.Println("default cover missing:", cover)
+			extractCmd := exec.Command(FFMPATH, "-y", "-i", input, "-an", "-vcodec", "copy", finalCoverPath)
+
+			// Выполняем команду и проверяем, создался ли файл
+			if err := extractCmd.Run(); err != nil || !fileExists(finalCoverPath) {
+				if err != nil {
+					log.Println("FFmpeg extract error:", err)
+				}
+
+				// Если извлечение не удалось, берем дефолтную обложку
+				defaultSource := getDefaultCover()
+				log.Println("Using default cover from:", defaultSource)
+
+				if !fileExists(defaultSource) {
+					log.Println("Critical: default cover missing at", defaultSource)
 					storage.SetVideoError(req.ID)
 					http.Error(w, "default cover missing", 500)
+					return
+				}
+
+				// КОПИРУЕМ дефолтный файл в папку с видео под именем thumb.jpg
+				if err := copyFile(defaultSource, finalCoverPath); err != nil {
+					log.Println("Error copying default cover:", err)
+					storage.SetVideoError(req.ID)
+					http.Error(w, "failed to copy cover", 500)
 					return
 				}
 			}
@@ -495,21 +522,33 @@ func UploadFinishHandler(storage *sqlite.Storage) http.HandlerFunc {
 				duration = 5
 			}
 
-			log.Println("Using cover:", cover)
+			log.Println("Using cover:", finalCoverPath)
+
+			// Определяем целевое разрешение (можно вынести в константы)
+			targetW := "1024"
+			targetH := "576"
+
+			filterChain := fmt.Sprintf(
+				"scale=%s:%s:force_original_aspect_ratio=decrease,pad=%s:%s:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+				targetW, targetH, targetW, targetH,
+			)
 
 			// --- создаём видео с одним кадром ---
-			cmd := exec.Command("ffmpeg",
+			cmd := exec.Command(FFMPATH,
 				"-y",
 				"-loop", "1",
-				"-i", cover,
+				"-i", finalCoverPath,
 				"-i", input,
+				"-vf", filterChain,
 				"-c:v", "libx264",
+				"-preset", "veryfast", // ускоряет создание для одного кадра
 				"-t", fmt.Sprintf("%.2f", duration),
-				"-pix_fmt", "yuv420p",
 				"-c:a", "copy",
 				"-map_metadata", "1",
+				"-shortest", // гарантирует завершение по самому короткому потоку
 				tmpVideo,
 			)
+
 			out, err := cmd.CombinedOutput()
 			if err != nil {
 				log.Println("audio→video failed:", string(out), err)
@@ -527,10 +566,6 @@ func UploadFinishHandler(storage *sqlite.Storage) http.HandlerFunc {
 				return
 			}
 
-			// --- удаляем временную cover.jpg если была создана ---
-			if cover != getDefaultCover() {
-				os.Remove(cover)
-			}
 		} else {
 
 		}
@@ -550,6 +585,23 @@ func UploadFinishHandler(storage *sqlite.Storage) http.HandlerFunc {
 
 		w.Write([]byte("ok"))
 	}
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	return err
 }
 
 func VideoStatusHandler(storage *sqlite.Storage) http.HandlerFunc {
@@ -767,7 +819,7 @@ func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string, all bo
 	thumbPath := filepath.Join(dir, "thumb.jpg")
 
 	cmd := exec.Command(
-		"ffmpeg",
+		FFMPATH,
 		"-y",
 		"-ss", thumbTime,
 		"-i", input,
@@ -797,6 +849,12 @@ func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string, all bo
 		return err
 	}
 
+	cover := filepath.Join(dir, "cover.jpg")
+	// --- удаляем временную cover.jpg если была создана ---
+	if cover != getDefaultCover() {
+		os.Remove(cover)
+	}
+
 	return nil
 }
 
@@ -810,7 +868,7 @@ func getDefaultCover() string {
 }
 
 func runFFmpeg(args []string) error {
-	cmd := exec.Command("ffmpeg", args...)
+	cmd := exec.Command(FFMPATH, args...)
 	out, err := cmd.CombinedOutput()
 
 	if err != nil {
