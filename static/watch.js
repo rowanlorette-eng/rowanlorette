@@ -45,7 +45,6 @@ const descToggle = document.getElementById("descToggle");
 
 // 0 — минимальное, 1 — максимальное, по дефолту 0
 let savedQualityPosition = Number(localStorage.getItem("qualityPosition")) || 0;
-
 let descriptionExpanded = false;
 
 const topSpacer = document.getElementById("top-spacer");

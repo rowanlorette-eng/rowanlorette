@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -33,19 +34,26 @@ func MustLoad() *Config {
 
 	absPath, err := filepath.Abs(configPath)
 	if err != nil {
-		log.Fatalf("can not resolve config path: %v", err)
+		handleError("can not resolve config path: %v", err)
 	}
 
 	data, err := os.ReadFile(absPath)
 	if err != nil {
-		log.Fatalf("can not read config file %s: %v", absPath, err)
+		handleError("can not read config file %s: %v", absPath, err)
 	}
 
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		log.Fatalf("can not parse yaml: %v", err)
+		handleError("can not parse yaml: %v", err)
 	}
 	return &cfg
+}
+
+func handleError(msg string, args ...interface{}) {
+	log.Printf(msg, args...)
+	fmt.Println("Press Enter to exit...")
+	fmt.Scanln()
+	os.Exit(1)
 }
 
 var CFG *Config
