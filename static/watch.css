@@ -536,6 +536,7 @@ video {
   width: 100%;
 }
 
+/* ===== ОПИСАНИЕ ВИДЕО С ПОДДЕРЖКОЙ MARKDOWN ===== */
 .video-description {
   position: relative;
   margin-top: 14px;
@@ -547,24 +548,141 @@ video {
   color: #e5e5e5;
   cursor: pointer;
   user-select: none;
+  position: relative;
+  z-index: 1; /* по умолчанию под видео */
+  transition: z-index 0.2s;
 }
 
 .video-description:hover {
   background: #242424;
 }
 
+/* Контент описания */
 .desc-content {
   overflow: hidden;
   display: -webkit-box;
-  -webkit-line-clamp: 3; /* ← сколько строк видно */
+  -webkit-line-clamp: 3; /* сколько строк видно */
   -webkit-box-orient: vertical;
   white-space: pre-wrap;
+  line-height: 1.6;
 }
 
-.video-description.expanded .desc-content {
-  -webkit-line-clamp: unset;
+/* ===== СТИЛИ ДЛЯ MARKDOWN КОНТЕНТА ===== */
+.desc-content p {
+  margin: 4px 0;
 }
 
+.desc-content h1,
+.desc-content h2,
+.desc-content h3,
+.desc-content h4,
+.desc-content h5,
+.desc-content h6 {
+  color: #e5e5e5;
+  margin: 12px 0 8px 0;
+  line-height: 1.3;
+}
+
+.desc-content ul,
+.desc-content ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.desc-content li {
+  margin: 2px 0;
+}
+
+.desc-content blockquote {
+  border-left: 4px solid #5865f2;
+  padding-left: 12px;
+  margin: 8px 0;
+  color: #b9bbbe;
+}
+
+.desc-content pre {
+  background: #2d2d2d;
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.desc-content code {
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-size: 13px;
+  background: #2d2d2d;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.desc-content pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.desc-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+}
+
+.desc-content th,
+.desc-content td {
+  border: 1px solid #3d3d3d;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.desc-content th {
+  background: #2d2d2d;
+  font-weight: 600;
+}
+
+.desc-content img {
+  max-width: 100%;
+  border-radius: 6px;
+  margin: 4px 0;
+}
+
+.desc-content input[type="checkbox"] {
+  margin-right: 8px;
+  vertical-align: middle;
+  accent-color: #5865f2;
+  cursor: default;
+  pointer-events: none;
+}
+
+.desc-content hr {
+  border: none;
+  border-top: 1px solid #3d3d3d;
+  margin: 12px 0;
+}
+
+/* Стиль для спойлеров */
+.desc-content .spoiler {
+  background: #2d2d2d;
+  border-radius: 4px;
+  padding: 0 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.desc-content .spoiler:hover {
+  background: transparent;
+}
+
+/* Ссылки в описании */
+.desc-content a {
+  color: #4da3ff;
+  text-decoration: underline;
+}
+
+.desc-content a:hover {
+  color: #6db5ff;
+}
+
+/* ===== КНОПКА "ЕЩЁ/СВЕРНУТЬ" ===== */
 .desc-more {
   margin-top: 6px;
   background: none;
@@ -575,7 +693,12 @@ video {
   padding: 0;
 }
 
-/* Градиент fade снизу */
+.desc-more:hover {
+  color: #6db5ff;
+  text-decoration: underline;
+}
+
+/* ===== ГРАДИЕНТ FADE СНИЗУ ===== */
 .video-description::after {
   content: "";
   position: absolute;
@@ -592,34 +715,26 @@ video {
   display: block;
 }
 
+/* ===== РАЗВЕРНУТОЕ СОСТОЯНИЕ ===== */
+.video-description.expanded {
+  cursor: default;
+  user-select: text;
+  z-index: 10; /* раскрытое описание поверх видео */
+}
+
+.video-description.expanded .desc-content {
+  -webkit-line-clamp: unset;
+  max-height: none;
+}
+
 .video-description.expanded::after {
   display: none; /* убираем градиент при разворачивании */
 }
 
-.video-description.expanded {
-  cursor: default;
-  user-select: text;
-}
-
+/* ===== ВИДЕО ОБЁРТКА ===== */
 #videoWrapper {
   position: relative;
   z-index: 2; /* видео выше свернутого описания */
-}
-
-.video-description {
-  position: relative;
-  z-index: 1; /* по умолчанию под видео */
-  transition: z-index 0.2s;
-}
-
-.video-description.expanded {
-  z-index: 10; /* раскрытое описание поверх видео */
-}
-
-/* Ссылки в описании */
-.desc-content a {
-  color: #4da3ff;
-  text-decoration: underline;
 }
 
 #list::-webkit-scrollbar {
