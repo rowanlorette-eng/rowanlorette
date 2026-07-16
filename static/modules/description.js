@@ -1,15 +1,60 @@
-export function setupMarked() {
-  marked.setOptions({
-    gfm: true,
-    breaks: true,
-    pedantic: false,
-    smartLists: true,
-    smartypants: false,
-    xhtml: false,
-  });
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+  pedantic: false,
+  smartLists: true,
+  smartypants: false,
+  xhtml: false,
+});
+
+let descriptionExpanded = false;
+const videoDescription = document.getElementById("videoDescription");
+const descContent = document.getElementById("descContent");
+const descToggle = document.getElementById("descToggle");
+
+function toggleDescription() {
+  descriptionExpanded = !descriptionExpanded;
+
+  if (descriptionExpanded) {
+    // Раскрываем описание
+    videoDescription.classList.add("expanded");
+    descToggle.textContent = "свернуть";
+    videoDescription.style.zIndex = "10";
+  } else {
+    // Свертываем описание
+    videoDescription.classList.remove("expanded");
+    descToggle.textContent = "…ещё";
+    videoDescription.style.zIndex = "1";
+  }
 }
 
-// ЭТУ ФУНКЦИЮ ОСТАВЛЯЕМ ПРИВАТНОЙ (НЕ ЭКСПОРТИРУЕМ)
+videoDescription.addEventListener("click", () => {
+  if (!descriptionExpanded) toggleDescription();
+});
+
+// Клик по кнопке "свернуть" закрывает описание
+descToggle.addEventListener("click", (e) => {
+  e.stopPropagation(); // чтобы не срабатывал клик по блоку
+  toggleDescription();
+});
+
+export function updateDescription(text) {
+  // Сбрасываем описание
+  descriptionExpanded = false;
+  videoDescription.classList.remove("expanded");
+  descToggle.textContent = "…ещё";
+
+  if (!text) {
+    descContent.innerHTML = "";
+    videoDescription.style.display = "none";
+    return;
+  }
+
+  renderDescription(text.trim(), descContent);
+
+  videoDescription.style.display = "block";
+}
+
 function processDiscordMarkdown(text) {
   let processed = text;
   processed = processed.replace(/\|\|(.+?)\|\|/g, (match, text) => {
@@ -21,10 +66,8 @@ function processDiscordMarkdown(text) {
   return processed;
 }
 
-export function renderDescription(markdown, containerElement) {
+function renderDescription(markdown, containerElement) {
   try {
-    setupMarked();
-
     const processedMarkdown = processDiscordMarkdown(markdown);
     const rawHtml = marked.parse(processedMarkdown);
     const safeHtml = DOMPurify.sanitize(rawHtml, {

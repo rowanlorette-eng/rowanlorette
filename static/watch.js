@@ -1,4 +1,4 @@
-import { renderDescription } from "./modules/description.js";
+import { updateDescription } from "./modules/description.js";
 const params = new URLSearchParams(location.search);
 let id = params.get("v");
 
@@ -40,13 +40,8 @@ const audioPlayer = document.getElementById("audioPlayer");
 const audioTitle = document.getElementById("audioTitle");
 const audioSettingsBtn = document.getElementById("audioSettingsBtn");
 
-const videoDescription = document.getElementById("videoDescription");
-const descContent = document.getElementById("descContent");
-const descToggle = document.getElementById("descToggle");
-
 // 0 — минимальное, 1 — максимальное, по дефолту 0
 let savedQualityPosition = Number(localStorage.getItem("qualityPosition")) || 0;
-let descriptionExpanded = false;
 
 const topSpacer = document.getElementById("top-spacer");
 let removedHeight = 0;
@@ -237,19 +232,7 @@ async function load() {
   titleEl.innerText = videoData.title || "";
   document.title = (videoData.title || "") + " - Umbrella Play";
 
-  // Сбрасываем описание
-  descriptionExpanded = false;
-  videoDescription.classList.remove("expanded");
-  descToggle.textContent = "…ещё";
-
-  // Обработка описания
-  if (videoData.description) {
-    renderDescription(videoData.description.trim(), descContent);
-    videoDescription.style.display = "block";
-  } else {
-    descContent.innerHTML = "";
-    videoDescription.style.display = "none";
-  }
+  updateDescription(videoData.description);
 
   // Статус видео
   if (videoData.status === "processing") {
@@ -939,33 +922,6 @@ player.volume = lastVolume;
 volume.value = lastVolume;
 player.muted = lastVolume === 0;
 updateMuteIcon();
-
-// Клик по блоку раскрывает описание только в свернутом виде
-videoDescription.addEventListener("click", () => {
-  if (!descriptionExpanded) toggleDescription();
-});
-
-// Клик по кнопке "свернуть" закрывает описание
-descToggle.addEventListener("click", (e) => {
-  e.stopPropagation(); // чтобы не срабатывал клик по блоку
-  toggleDescription();
-});
-
-function toggleDescription() {
-  descriptionExpanded = !descriptionExpanded;
-
-  if (descriptionExpanded) {
-    // Раскрываем описание
-    videoDescription.classList.add("expanded");
-    descToggle.textContent = "свернуть";
-    videoDescription.style.zIndex = "10";
-  } else {
-    // Свертываем описание
-    videoDescription.classList.remove("expanded");
-    descToggle.textContent = "…ещё";
-    videoDescription.style.zIndex = "1";
-  }
-}
 
 // ----------------- AUTOPLAY NEXT VIDEO -----------------
 player.onended = async () => {
