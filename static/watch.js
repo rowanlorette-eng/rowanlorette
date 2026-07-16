@@ -1,3 +1,4 @@
+import { renderDescription } from "./modules/description.js";
 const params = new URLSearchParams(location.search);
 let id = params.get("v");
 
@@ -58,63 +59,6 @@ const AUTO_HIDE_MS = 3000;
 let hideTimer = null;
 
 const nextVideoBtn = document.getElementById("nextVideoBtn");
-
-// ===== НАСТРОЙКА MARKED (ДЛЯ V18) =====
-// ===== НАСТРОЙКА MARKED (РАБОЧИЙ ВАРИАНТ ДЛЯ V18) =====
-// 1. Создаем кастомный renderer для стилей
-
-// 3. Устанавливаем глобальные настройки
-marked.setOptions({
-  gfm: true,
-  breaks: true,
-  pedantic: false,
-  smartLists: true,
-  smartypants: false,
-  xhtml: false,
-});
-
-// 4. Функция для обработки Discord/Obsidian специфичных фич
-function processDiscordMarkdown(text) {
-  let processed = text;
-
-  // Поддержка спойлеров (||текст||)
-  processed = processed.replace(/\|\|(.+?)\|\|/g, (match, text) => {
-    return `<span class="spoiler" style="background:#2d2d2d;border-radius:4px;padding:0 4px;cursor:pointer;" onclick="this.style.background='transparent'">${text}</span>`;
-  });
-
-  // Поддержка упоминаний (@username) - только в начале строки или после пробела
-  processed = processed.replace(/(^|\s)@(\w+)/g, (match, space, username) => {
-    return `${space}<span style="color:#5865F2;font-weight:500;">@${username}</span>`;
-  });
-
-  return processed;
-}
-
-// 5. Функция renderDescription - ИСПОЛЬЗУЕМ LEXER + PARSER (СИНХРОННО)
-function renderDescription(markdown) {
-  try {
-    const processedMarkdown = processDiscordMarkdown(markdown);
-
-    descContent.innerHTML = marked.parse(processedMarkdown);
-
-    // делаем ссылки красивыми
-    descContent.querySelectorAll("a").forEach((a) => {
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-    });
-
-    // подсветка кода
-    if (typeof Prism !== "undefined") {
-      descContent.querySelectorAll("pre code").forEach((block) => {
-        Prism.highlightElement(block);
-      });
-    }
-  } catch (e) {
-    console.error("Error rendering markdown:", e);
-    descContent.textContent = markdown;
-  }
-}
-// ===== КОНЕЦ НАСТРОЙКИ MARKED =====
 
 // Определяем, широкое видео или вертикальное
 function isLandscapeVideo() {
@@ -300,9 +244,10 @@ async function load() {
 
   // Обработка описания
   if (videoData.description) {
-    renderDescription(videoData.description.trim());
+    renderDescription(videoData.description.trim(), descContent);
     videoDescription.style.display = "block";
   } else {
+    descContent.innerHTML = "";
     videoDescription.style.display = "none";
   }
 

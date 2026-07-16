@@ -1,6 +1,10 @@
 # =========================
 # Generated / runtime data
 # =========================
+node_modules/
+.DS_Store
+*.log
+
 videos/
 *.log
 *.mp3
