@@ -1,4 +1,13 @@
-import { updateDescription } from "./modules/description.js";
+import { updateDescription } from "./modules/watch/description.js";
+import {
+  initSettings,
+  setHlsInstance,
+  populateQualityMenu,
+  toggleAutoplay,
+  toggleRepeat,
+  getSettings,
+} from "./modules/watch/settings.js";
+
 const params = new URLSearchParams(location.search);
 let id = params.get("v");
 
@@ -30,18 +39,67 @@ const buffer = document.getElementById("buffer");
 const controls = document.getElementById("controls");
 const videoWrapper = document.getElementById("videoWrapper");
 const loader = document.getElementById("loader");
-const settingsBtn = document.getElementById("settingsBtn");
-const settingsMenu = document.getElementById("settingsMenu");
+
+// --- Элементы для настроек (уже не нужны, но оставляем для инициализации) ---
 const qualityBtn = document.getElementById("qualityBtn");
 const qualityMenu = document.getElementById("qualityMenu");
+const settingsBtn = document.getElementById("settingsBtn");
+const settingsMenu = document.getElementById("settingsMenu");
+const audioSettingsBtn = document.getElementById("audioSettingsBtn");
 
 const audioWrapper = document.getElementById("audioWrapper");
 const audioPlayer = document.getElementById("audioPlayer");
 const audioTitle = document.getElementById("audioTitle");
-const audioSettingsBtn = document.getElementById("audioSettingsBtn");
 
-// 0 — минимальное, 1 — максимальное, по дефолту 0
-let savedQualityPosition = Number(localStorage.getItem("qualityPosition")) || 0;
+// --- Инициализация настроек ---
+const settingsState = initSettings(
+  player,
+  qualityMenu,
+  qualityBtn,
+  settingsMenu,
+  settingsBtn,
+  audioSettingsBtn,
+);
+
+// --- Настройки автоплея и повтора ---
+const autoplayBtn = document.getElementById("autoplayBtn");
+const autoplayIcon = document.getElementById("autoplayIcon");
+const repeatBtn = document.getElementById("repeatBtn");
+const repeatIcon = document.getElementById("repeatIcon");
+
+// Обновление иконок
+function updateAutoplayIcon() {
+  const settings = getSettings();
+  autoplayIcon.src = settings.autoplayEnabled
+    ? "/icons/toggleon.png"
+    : "/icons/toggleoff.png";
+}
+
+function updateRepeatIcon() {
+  const settings = getSettings();
+  repeatIcon.src = settings.repeatEnabled
+    ? "/icons/repeaton.png"
+    : "/icons/repeatoff.png";
+}
+
+// Инициализация иконок
+updateAutoplayIcon();
+updateRepeatIcon();
+
+// --- Обработчики для кнопок ---
+autoplayBtn.onclick = (e) => {
+  e.stopPropagation();
+  const result = toggleAutoplay();
+  updateAutoplayIcon();
+  updateRepeatIcon();
+};
+
+repeatBtn.onclick = (e) => {
+  e.stopPropagation();
+  const result = toggleRepeat();
+  updateAutoplayIcon();
+  updateRepeatIcon();
+};
 
 const topSpacer = document.getElementById("top-spacer");
 let removedHeight = 0;
@@ -62,14 +120,8 @@ function isLandscapeVideo() {
 
 async function openVideo(newId, autoplay = true) {
   id = newId;
-
-  // меняем URL БЕЗ перезагрузки
   history.pushState(null, "", `?v=${id}`);
-
-  // ставим autoplay
   sessionStorage.setItem("autoplay", autoplay ? "1" : "0");
-
-  // грузим видео заново
   await load();
 }
 
@@ -80,41 +132,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       await player.play();
       console.log("Autoplay сработал");
-
-      // ✅ удаляем флаг только после попытки воспроизведения
       sessionStorage.removeItem("autoplay");
     } catch (e) {
       console.log("Autoplay заблокирован браузером", e);
-      //const btn = document.createElement("button");
-      // btn.textContent = "▶ Воспроизвести";
-      // btn.style.position = "absolute";
-      // btn.style.top = "50%";
-      // btn.style.left = "50%";
-      // btn.style.transform = "translate(-50%, -50%)";
-      // btn.style.padding = "1rem 2rem";
-      // btn.style.fontSize = "1.2rem";
-      // btn.onclick = () => {
-      //   player.play();
-      //   sessionStorage.removeItem("autoplay"); // ❌ удаляем после ручного клика
-      // };
-      // document.body.appendChild(btn);
     }
   }
 });
 
 async function playNextVideo() {
   try {
-    // получаем список видео
     const res = await fetch(`/api/videos?offset=0&limit=50`);
     let videos = await res.json();
     videos = Array.isArray(videos) ? videos : [];
 
-    // список просмотренных видео через автоплей и кнопку "следующее"
     const watched = JSON.parse(
       sessionStorage.getItem("autoplayWatched") || "[]",
     );
 
-    // исключаем текущее видео и уже просмотренные
     videos = videos.filter(
       (v) => v.id !== id && v.status === "ready" && !watched.includes(v.id),
     );
@@ -125,77 +159,17 @@ async function playNextVideo() {
     }
 
     const nextVideo = videos[0];
-
-    // добавляем текущее видео в watched
     watched.push(id);
     sessionStorage.setItem("autoplayWatched", JSON.stringify(watched));
-
-    // ставим autoplay на следующем видео
     openVideo(nextVideo.id, true);
   } catch (e) {
     console.error("Ошибка перехода к следующему видео:", e);
   }
 }
 
-// клик по кнопке
 nextVideoBtn.onclick = (e) => {
   e.stopPropagation();
   playNextVideo();
-};
-
-// === Автовоспроизведение ===
-const autoplayBtn = document.getElementById("autoplayBtn");
-const autoplayIcon = document.getElementById("autoplayIcon");
-
-// читаем из localStorage (default = false)
-let autoplayEnabled = localStorage.getItem("autoplayEnabled") === "1";
-// обновляем иконку при загрузке страницы
-function updateAutoplayIcon() {
-  autoplayIcon.src = autoplayEnabled
-    ? "/icons/toggleon.png"
-    : "/icons/toggleoff.png";
-}
-updateAutoplayIcon();
-// Повтор
-const repeatBtn = document.getElementById("repeatBtn");
-const repeatIcon = document.getElementById("repeatIcon");
-
-let repeatEnabled = localStorage.getItem("repeatEnabled") === "1";
-function updateRepeatIcon() {
-  repeatIcon.src = repeatEnabled
-    ? "/icons/repeaton.png"
-    : "/icons/repeatoff.png";
-}
-updateRepeatIcon();
-
-repeatBtn.onclick = (e) => {
-  e.stopPropagation();
-
-  repeatEnabled = !repeatEnabled;
-  localStorage.setItem("repeatEnabled", repeatEnabled ? "1" : "0");
-  updateRepeatIcon();
-
-  // если включаем повтор — выключаем автовоспроизведение
-  if (repeatEnabled) {
-    autoplayEnabled = false;
-    localStorage.setItem("autoplayEnabled", "0");
-    updateAutoplayIcon();
-  }
-};
-
-// переключение состояния по клику
-autoplayBtn.onclick = (e) => {
-  e.stopPropagation();
-  autoplayEnabled = !autoplayEnabled;
-  localStorage.setItem("autoplayEnabled", autoplayEnabled ? "1" : "0");
-  updateAutoplayIcon();
-
-  // если включаем автовоспроизведение — выключаем повтор
-  if (autoplayEnabled) {
-    repeatEnabled = false;
-    localStorage.setItem("repeatEnabled", "0");
-    updateRepeatIcon();
-  }
 };
 
 function shuffle(array) {
@@ -207,7 +181,6 @@ function shuffle(array) {
 
 async function load() {
   if (!id) {
-    // Получаем случайное видео, если нет id
     const resp = await fetch("/api/random");
     if (!resp.ok) {
       document.body.innerHTML = "<h2>Нет видео для просмотра</h2>";
@@ -215,10 +188,9 @@ async function load() {
     }
     id = await resp.text();
     history.replaceState(null, "", `?v=${id}`);
-    sessionStorage.setItem("autoplay", "1"); // автоплей по умолчанию
+    sessionStorage.setItem("autoplay", "1");
   }
 
-  // Получаем данные видео
   let videoData;
   try {
     const res = await fetch(`/api/video/${id}`);
@@ -231,10 +203,8 @@ async function load() {
 
   titleEl.innerText = videoData.title || "";
   document.title = (videoData.title || "") + " - Umbrella Play";
-
   updateDescription(videoData.description);
 
-  // Статус видео
   if (videoData.status === "processing") {
     statusEl.innerText = "Видео обрабатывается...";
     setTimeout(load, 1500);
@@ -246,13 +216,11 @@ async function load() {
     return;
   }
 
-  // --- поток HLS ---
   let streamURL = videoData.stream_url;
   if (!streamURL.endsWith(".m3u8")) {
     streamURL = streamURL.replace(/\/+$/, "") + "/index.m3u8";
   }
 
-  // Уничтожаем старый плеер
   if (hlsInstance) {
     try {
       hlsInstance.destroy();
@@ -268,8 +236,13 @@ async function load() {
     hlsInstance.loadSource(streamURL);
     hlsInstance.attachMedia(player);
 
+    // Передаем hlsInstance в модуль настроек
+    setHlsInstance(hlsInstance);
+
     hlsInstance.on(Hls.Events.MANIFEST_PARSED, async () => {
       hideLoader();
+
+      // Используем функцию из модуля настроек
       populateQualityMenu(hlsInstance.levels);
 
       if (shouldAutoplayNow()) {
@@ -291,36 +264,7 @@ async function load() {
     });
   }
 
-  // --- audio-only ---
   audioPlayer.src = streamURL;
-
-  // --- меню качества ---
-  function populateQualityMenu(levels) {
-    qualityMenu.innerHTML = "";
-
-    // строим только видео качества
-    levels.forEach((level, idx) => {
-      const item = document.createElement("div");
-      item.className = "settings-quality";
-      item.dataset.quality = idx;
-      item.textContent = level.height + "p";
-      qualityMenu.appendChild(item);
-    });
-
-    // Подсветка дефолтного качества
-    const pos = Math.min(savedQualityPosition, levels.length - 1);
-    hlsInstance.currentLevel = pos;
-
-    setTimeout(() => {
-      const items = qualityMenu.querySelectorAll(".settings-quality");
-      items.forEach((i) => i.classList.remove("active"));
-      if (items[pos]) items[pos].classList.add("active");
-    }, 0);
-  }
-
-  // обработка клика по качеству
-
-  // Показ списка видео
   loadVideoList(true);
 }
 
@@ -379,35 +323,28 @@ const listEl = document.getElementById("list");
 listEl.addEventListener("scroll", () => {
   const nearBottom =
     listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 50;
-
   if (nearBottom) {
     loadVideoList();
   }
 });
 
 window.addEventListener("scroll", () => {
-  // если list сам скроллится — window не трогаем
   if (listEl.scrollHeight > listEl.clientHeight) return;
-
   const nearBottom =
     window.innerHeight + window.scrollY >= document.body.offsetHeight - 300;
-
   if (nearBottom) loadVideoList();
 });
 
-// Функция перехода в fullscreen и поворот mobile
-// Вход в fullscreen
+// --- FULLSCREEN FUNCTIONS (unchanged) ---
 async function enterFullscreenMobile() {
   if (!mobileFullscreen) {
     mobileFullscreen = true;
-
     try {
       if (videoWrapper.requestFullscreen)
         await videoWrapper.requestFullscreen();
       else if (videoWrapper.webkitRequestFullscreen)
         await videoWrapper.webkitRequestFullscreen();
 
-      // если видео горизонтальное — повернуть экран
       if (player.videoWidth > player.videoHeight) {
         if (screen.orientation && screen.orientation.lock) {
           await screen.orientation.lock("landscape");
@@ -416,16 +353,13 @@ async function enterFullscreenMobile() {
     } catch (err) {
       console.log("Fullscreen error:", err);
     }
-
     updateMobileFullscreenLayout();
   }
 }
 
-// Выход из fullscreen
 function exitFullscreenMobile() {
   if (mobileFullscreen) {
     mobileFullscreen = false;
-
     if (document.exitFullscreen) document.exitFullscreen();
     else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
 
@@ -443,83 +377,19 @@ function exitFullscreenMobile() {
   }
 }
 
-// Обновление позиции и поворота видео в fullscreen
 function updateMobileFullscreenLayout() {
   if (!mobileFullscreen) return;
-
   const isLandscape = isLandscapeVideo();
-  const angle = window.orientation || screen.orientation?.angle || 0;
-  const isDeviceLandscape = Math.abs(angle) === 90;
-
-  // горизонтальное видео
   if (isLandscape) {
     videoWrapper.classList.add("fullscreen-landscape");
     videoWrapper.classList.remove("fullscreen-portrait");
   } else {
-    // вертикальное видео
     videoWrapper.classList.add("fullscreen-portrait");
     videoWrapper.classList.remove("fullscreen-landscape");
   }
 }
 
-// ----------------- SETTINGS MENU -----------------
-settingsBtn.onclick = (e) => {
-  e.stopPropagation();
-  settingsMenu.style.display =
-    settingsMenu.style.display === "flex" ? "none" : "flex";
-};
-
-audioSettingsBtn.onclick = (e) => {
-  e.stopPropagation();
-  audioWrapper.querySelector(".audio-controls .settings-menu")?.remove();
-  settingsMenu.style.display =
-    settingsMenu.style.display === "flex" ? "none" : "flex";
-};
-
-document.addEventListener("click", () => {
-  settingsMenu.style.display = "none";
-  qualityMenu.style.display = "none";
-});
-
-qualityBtn.onclick = (e) => {
-  e.stopPropagation();
-  qualityMenu.style.display = "flex";
-};
-
-qualityMenu.onclick = (e) => {
-  const item = e.target.closest(".settings-quality");
-  if (!item || !hlsInstance) return;
-
-  const mode = item.dataset.quality;
-
-  qualityMenu
-    .querySelectorAll(".settings-quality")
-    .forEach((i) => i.classList.remove("active"));
-  item.classList.add("active");
-
-  if (mode === "audio") {
-    player.style.display = "none";
-    audioWrapper.style.display = "block";
-    audioPlayer.play();
-  } else {
-    const level = parseInt(mode);
-    hlsInstance.currentLevel = level;
-
-    savedQualityPosition = level;
-    localStorage.setItem("qualityPosition", level);
-
-    player.style.display = "block";
-    audioWrapper.style.display = "none";
-    player.play();
-  }
-
-  settingsMenu.style.display = "none";
-  qualityMenu.style.display = "none";
-};
-
-// ----------------- CONTROLS -----------------
-
-// --- show/hide controls как у тебя ---
+// --- CONTROLS (unchanged) ---
 function showControls() {
   controls.style.opacity = "1";
   controls.style.transform = "translateY(0)";
@@ -528,7 +398,6 @@ function showControls() {
   buffer.style.opacity = "1";
   buffer.style.transform = "translateY(0)";
 
-  // если меню уже открыто, поддерживаем его видимым
   if (settingsMenu.classList.contains("open")) {
     settingsMenu.style.opacity = "1";
     settingsMenu.style.transform = "translateY(0)";
@@ -547,7 +416,6 @@ function hideControls() {
   buffer.style.opacity = "0";
   buffer.style.transform = "translateY(20px)";
 
-  // меню тоже скрываем, но класс open оставляем для клика
   if (settingsMenu.classList.contains("open")) {
     settingsMenu.style.opacity = "0";
     settingsMenu.style.transform = "translateY(20px)";
@@ -555,64 +423,26 @@ function hideControls() {
   }
 }
 
-// --- кнопка настроек ---
-settingsBtn.addEventListener("click", (e) => {
-  e.stopPropagation(); // чтобы клик не уходил в видео
-  if (settingsMenu.classList.contains("open")) {
-    // закрываем
-    settingsMenu.classList.remove("open");
-    settingsMenu.style.opacity = "0";
-    settingsMenu.style.transform = "translateY(20px)";
-    settingsMenu.style.pointerEvents = "none";
-  } else {
-    // открываем
-    settingsMenu.classList.add("open");
-    settingsMenu.style.opacity = "1";
-    settingsMenu.style.transform = "translateY(0)";
-    settingsMenu.style.pointerEvents = "auto";
-
-    // показываем контролы на всякий случай
-    showControls();
-  }
-});
-
-// --- клик по странице скрывает меню ---
-document.addEventListener("click", () => {
-  if (settingsMenu.classList.contains("open")) {
-    settingsMenu.classList.remove("open");
-    settingsMenu.style.opacity = "0";
-    settingsMenu.style.transform = "translateY(20px)";
-    settingsMenu.style.pointerEvents = "none";
-  }
-});
-
-// --- не закрывать меню при клике по нему ---
-settingsMenu.addEventListener("click", (e) => e.stopPropagation());
-
-// play/pause
+// --- PLAY/PAUSE (unchanged) ---
 const playPauseIcon = document.getElementById("playPauseIcon");
 
-// клик по кнопке
 playPause.onclick = () => {
   if (player.paused) player.play();
   else player.pause();
 };
 
-// клик по видео
 player.onclick = () => {
   if (player.paused) player.play();
   else player.pause();
 };
 
-// ===== SMART LOADER CONTROL =====
-
+// --- LOADER (unchanged) ---
 let isBuffering = false;
 let hasFirstFrame = false;
 let loaderTimer = null;
 
 function showLoaderSmart() {
   clearTimeout(loaderTimer);
-
   loaderTimer = setTimeout(() => {
     if (!hasFirstFrame || isBuffering) {
       loader.style.display = "block";
@@ -646,7 +476,7 @@ player.addEventListener("playing", () => {
   hideLoaderSmart();
 });
 
-// события плеера
+// --- PLAYER EVENTS (unchanged) ---
 player.onpause = () => {
   overlay.style.display = "flex";
   playPauseIcon.src = "/icons/play.png";
@@ -655,11 +485,10 @@ player.onpause = () => {
 
 player.onplay = () => {
   overlay.style.display = "none";
-  playPauseIcon.src = "/icons/pause.png"; //
+  playPauseIcon.src = "/icons/pause.png";
   showControls();
 };
 
-// большая кнопка play в центре
 bigPlay.onclick = () => {
   player.play();
   overlay.style.display = "none";
@@ -669,18 +498,15 @@ bigPlay.onclick = () => {
 player.ontimeupdate = () => {
   const current = player.currentTime;
   const duration = player.duration || 0;
-
   seek.value = duration ? (current / duration) * 100 : 0;
 
   const fmt = (t) => {
     const h = Math.floor(t / 3600);
     const m = Math.floor((t % 3600) / 60);
     const s = Math.floor(t % 60);
-
     if (h > 0) {
       return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
     }
-
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
@@ -692,16 +518,13 @@ seek.oninput = () => {
   player.currentTime = (seek.value / 100) * duration;
 };
 
-// volume
+// --- VOLUME (unchanged) ---
 volume.oninput = () => {
   const v = Number(volume.value);
   player.volume = v;
-
   player.muted = v === 0;
   if (v > 0) lastVolume = v;
-
   localStorage.setItem("playerVolume", v);
-
   updateMuteIcon();
 };
 
@@ -715,7 +538,6 @@ muteBtn.onclick = () => {
     player.volume = 0;
     volume.value = 0;
   }
-
   localStorage.setItem("playerVolume", player.volume);
   updateMuteIcon();
 };
@@ -728,7 +550,7 @@ function updateMuteIcon() {
   }
 }
 
-// fullscreen
+// --- FULLSCREEN BUTTON (unchanged) ---
 fullscreen.onclick = () => {
   if (/Mobi|Android/i.test(navigator.userAgent)) {
     if (!mobileFullscreen) enterFullscreenMobile();
@@ -739,16 +561,14 @@ fullscreen.onclick = () => {
   }
 };
 
-// Обновление при изменении ориентации или ресайзе
 window.addEventListener("orientationchange", updateMobileFullscreenLayout);
 window.addEventListener("resize", updateMobileFullscreenLayout);
 
-// Если пользователь выходит из fullscreen через системную кнопку
 document.addEventListener("fullscreenchange", () => {
   if (!document.fullscreenElement) mobileFullscreen = false;
 });
 
-// buffer
+// --- BUFFER (unchanged) ---
 function updateBuffer() {
   const buffered = player.buffered;
   const duration = player.duration || 0;
@@ -765,7 +585,7 @@ function hideLoader() {
   loader.style.display = "none";
 }
 
-// ----------------- AUDIO PLAYER -----------------
+// --- AUDIO PLAYER (unchanged) ---
 document.querySelectorAll(".audio-player").forEach((player) => {
   const audio = player.querySelector(".audio");
   const playBtn = player.querySelector(".play-pause");
@@ -813,10 +633,11 @@ document.querySelectorAll(".audio-player").forEach((player) => {
   });
 });
 
-// ----------------- INIT -----------------
+// --- INIT (unchanged) ---
 videoWrapper.addEventListener("mousemove", showControls);
 videoWrapper.addEventListener("click", showControls);
 videoWrapper.addEventListener("mouseleave", hideControls);
+
 document.addEventListener("keydown", (e) => {
   const active = document.activeElement;
   if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA"))
@@ -843,7 +664,7 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// ----------------- MOBILE GESTURES: DOUBLE-TAP + PINCH -----------------
+// --- MOBILE GESTURES (unchanged) ---
 let lastTapTime = 0;
 let pinchStartDist = null;
 let pinchStartScale = 1;
@@ -851,7 +672,6 @@ let currentScale = 1;
 
 videoWrapper.addEventListener("touchstart", (e) => {
   if (e.touches.length === 2) {
-    // Начало pinch
     e.preventDefault();
     const dx = e.touches[0].pageX - e.touches[1].pageX;
     const dy = e.touches[0].pageY - e.touches[1].pageY;
@@ -862,33 +682,27 @@ videoWrapper.addEventListener("touchstart", (e) => {
 
 videoWrapper.addEventListener("touchmove", (e) => {
   if (e.touches.length === 2 && pinchStartDist) {
-    // Pinch in progress
     e.preventDefault();
     const dx = e.touches[0].pageX - e.touches[1].pageX;
     const dy = e.touches[0].pageY - e.touches[1].pageY;
     const newDist = Math.hypot(dx, dy);
     let scale = pinchStartScale * (newDist / pinchStartDist);
-
-    // Ограничение масштаба
     scale = Math.max(1, Math.min(3, scale));
     currentScale = scale;
 
-    // Выбираем элемент для масштабирования
-    let targetWrapper = videoWrapper; // обычный режим
+    let targetWrapper = videoWrapper;
     if (mobileFullscreen) {
-      targetWrapper = player; // fullscreen: масштабируем сам <video>
+      targetWrapper = player;
     }
     targetWrapper.style.transform = `scale(${scale})`;
   }
 });
 
 videoWrapper.addEventListener("touchend", (e) => {
-  // Сброс pinch
   if (e.touches.length < 2) {
     pinchStartDist = null;
   }
 
-  // Double-tap только если один палец
   if (e.touches.length === 0) {
     const now = Date.now();
     const touch = e.changedTouches[0];
@@ -896,7 +710,6 @@ videoWrapper.addEventListener("touchend", (e) => {
     const x = touch.clientX - rect.left;
 
     if (now - lastTapTime < 300) {
-      // Двойной тап срабатывает
       if (x < rect.width / 2) {
         player.currentTime = Math.max(0, player.currentTime - 10);
       } else {
@@ -914,29 +727,29 @@ videoWrapper.addEventListener("touchend", (e) => {
   }
 });
 
+// --- START ---
 showControls();
 load();
 
-// применяем сохраненную громкость
 player.volume = lastVolume;
 volume.value = lastVolume;
 player.muted = lastVolume === 0;
 updateMuteIcon();
 
-// ----------------- AUTOPLAY NEXT VIDEO -----------------
+// --- AUTOPLAY NEXT VIDEO ---
 player.onended = async () => {
   overlay.style.display = "flex";
   playPauseIcon.src = "/icons/play.png";
 
-  // если повтор включен — просто начать видео заново
-  if (repeatEnabled) {
+  const settings = getSettings();
+
+  if (settings.repeatEnabled) {
     player.currentTime = 0;
     player.play();
     return;
   }
 
-  // если автовоспроизведение выключено — ничего не делаем
-  if (!autoplayEnabled) return;
+  if (!settings.autoplayEnabled) return;
 
   try {
     const res = await fetch(`/api/videos?offset=0&limit=50`);
@@ -955,7 +768,6 @@ player.onended = async () => {
     const nextVideo = videos[0];
     watched.push(id);
     sessionStorage.setItem("autoplayWatched", JSON.stringify(watched));
-
     openVideo(nextVideo.id, true);
   } catch (e) {
     console.error("Ошибка автоперехода:", e);
