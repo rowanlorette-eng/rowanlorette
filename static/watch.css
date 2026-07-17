@@ -719,7 +719,7 @@ video {
 .video-description.expanded {
   cursor: default;
   user-select: text;
-  z-index: 10; /* раскрытое описание поверх видео */
+  z-index: 3; /* раскрытое описание поверх видео */
 }
 
 .video-description.expanded .desc-content {
@@ -809,5 +809,207 @@ video {
     max-width: none;
     width: 100%;
     height: 180px;
+  }
+}
+
+/* Стиль для отображения текущего качества */
+.settings-item .quality-label {
+  margin-left: auto;
+  margin-right: 4px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 400;
+}
+
+.settings-item .arrow {
+  margin-left: 0;
+  opacity: 0.6;
+  font-size: 16px;
+}
+
+/* На мобилке */
+@media (max-width: 900px) {
+  .settings-item .quality-label {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+}
+
+/* Скрываем заголовок на десктопе */
+.settings-header {
+  display: none;
+}
+
+#videoWrapper.menu-open {
+  z-index: 100 !important;
+}
+
+/* Показываем заголовок только на мобилке */
+@media (max-width: 900px) {
+  .settings-menu.mobile-bottom .settings-header {
+    display: flex !important;
+  }
+}
+/* ===== МОБИЛЬНОЕ МЕНЮ НАСТРОЕК КАК НА YOUTUBE ===== */
+@media (max-width: 900px) {
+  /* Убираем оверлей полностью - он не нужен */
+  .settings-overlay {
+    display: none !important;
+  }
+
+  /* Стили для мобильного меню */
+  .settings-menu.mobile-bottom {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-height: 70vh !important;
+    background: rgba(30, 30, 30, 0.98) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border-radius: 16px 16px 0 0 !important;
+    padding: 8px 0 20px 0 !important;
+    transform: translateY(100%) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transition:
+      transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    z-index: 99999 !important; /* Очень высокий приоритет */
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6) !important;
+    overflow-y: auto !important;
+  }
+
+  .settings-menu.mobile-bottom.open {
+    transform: translateY(0) !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  /* Индикатор сверху (полоска) */
+  .settings-menu.mobile-bottom::before {
+    content: "";
+    display: block;
+    width: 40px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    margin: 8px auto 12px auto;
+    flex-shrink: 0;
+    position: sticky;
+    top: 8px;
+    z-index: 1;
+  }
+
+  /* Заголовок меню */
+  .settings-menu.mobile-bottom .settings-header {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 20px 12px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 16px;
+    font-weight: 500;
+    color: #fff;
+    position: sticky;
+    top: 0;
+    background: rgba(30, 30, 30, 0.98);
+    backdrop-filter: blur(20px);
+    z-index: 2;
+  }
+
+  .settings-menu.mobile-bottom .settings-close {
+    background: none;
+    border: none;
+    color: #aaa;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 4px 8px;
+    z-index: 3;
+  }
+
+  .settings-menu.mobile-bottom .settings-close:hover {
+    color: #fff;
+  }
+
+  /* Элементы меню на мобилке - УБИРАЕМ pointer-events: none */
+  .settings-menu.mobile-bottom .settings-item {
+    padding: 14px 20px !important;
+    font-size: 15px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    cursor: pointer !important;
+    position: relative;
+    z-index: 1;
+    pointer-events: auto !important; /* КРИТИЧНО - чтобы работали клики */
+  }
+
+  .settings-menu.mobile-bottom .settings-item:active {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .settings-menu.mobile-bottom .settings-quality {
+    padding: 14px 20px 14px 48px !important;
+    font-size: 15px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    cursor: pointer !important;
+    position: relative;
+    z-index: 1;
+    pointer-events: auto !important; /* КРИТИЧНО - чтобы работали клики */
+  }
+
+  .settings-menu.mobile-bottom .settings-quality:active {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  /* Меню качества внутри мобильного меню */
+  .settings-menu.mobile-bottom #qualityMenu {
+    background: transparent !important;
+    position: static !important;
+    width: 100% !important;
+    max-height: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    display: none !important;
+    pointer-events: auto !important;
+  }
+
+  .settings-menu.mobile-bottom #qualityMenu.active {
+    display: flex !important;
+    flex-direction: column;
+  }
+
+  .settings-menu.mobile-bottom #qualityMenu .settings-quality {
+    padding-left: 48px !important;
+  }
+
+  /* Стили скролла */
+  .settings-menu.mobile-bottom::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .settings-menu.mobile-bottom::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .settings-menu.mobile-bottom::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+  }
+
+  /* Индикатор при свайпе */
+  .settings-menu.mobile-bottom.swiping::before {
+    background: rgba(255, 255, 255, 0.6);
+    transform: scaleX(0.8);
+    transition: all 0.2s ease;
+  }
+}
+
+/* Отключаем старые стили меню на мобилке */
+@media (max-width: 900px) {
+  .settings-menu:not(.mobile-bottom) {
+    display: none !important;
   }
 }

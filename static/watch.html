@@ -88,7 +88,7 @@
 
           <!-- settings menu -->
           <div class="settings-menu" id="settingsMenu">
-            <div class="settings-item" id="repeatBtn">
+            <div class="settings-item" id="repeatBtn" data-action="repeat">
               <img
                 id="repeatIcon"
                 src="/icons/repeatoff.png"
@@ -98,7 +98,7 @@
               <span>Повтор</span>
             </div>
 
-            <div class="settings-item" id="autoplayBtn">
+            <div class="settings-item" id="autoplayBtn" data-action="autoplay">
               <img
                 id="autoplayIcon"
                 src="/icons/toggleoff.png"
@@ -111,6 +111,7 @@
             <div class="settings-item" id="qualityBtn">
               <img src="/icons/equalizer.png" class="icon-btn" alt="settings" />
               <span>Качество</span>
+              <span class="quality-label"></span>
               <span class="arrow">›</span>
             </div>
 

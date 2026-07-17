@@ -6,6 +6,7 @@ import {
   toggleAutoplay,
   toggleRepeat,
   getSettings,
+  refreshQualityDisplay,
 } from "./modules/watch/settings.js";
 
 const params = new URLSearchParams(location.search);
@@ -85,6 +86,12 @@ function updateRepeatIcon() {
 // Инициализация иконок
 updateAutoplayIcon();
 updateRepeatIcon();
+
+// --- ДОБАВЛЕНО: Слушаем события обновления настроек из меню ---
+document.addEventListener("settingsUpdated", (e) => {
+  updateAutoplayIcon();
+  updateRepeatIcon();
+});
 
 // --- Обработчики для кнопок ---
 autoplayBtn.onclick = (e) => {
@@ -244,6 +251,8 @@ async function load() {
 
       // Используем функцию из модуля настроек
       populateQualityMenu(hlsInstance.levels);
+
+      refreshQualityDisplay();
 
       if (shouldAutoplayNow()) {
         try {
