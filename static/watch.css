@@ -844,19 +844,8 @@ video {
   z-index: 100 !important;
 }
 
-/* Показываем заголовок только на мобилке */
-@media (max-width: 900px) {
-  .settings-menu.mobile-bottom .settings-header {
-    display: flex !important;
-  }
-}
 /* ===== МОБИЛЬНОЕ МЕНЮ НАСТРОЕК КАК НА YOUTUBE ===== */
 @media (max-width: 900px) {
-  /* Убираем оверлей полностью - он не нужен */
-  .settings-overlay {
-    display: none !important;
-  }
-
   /* Стили для мобильного меню */
   .settings-menu.mobile-bottom {
     position: fixed !important;
@@ -870,21 +859,29 @@ video {
     -webkit-backdrop-filter: blur(20px) !important;
     border-radius: 16px 16px 0 0 !important;
     padding: 8px 0 20px 0 !important;
-    transform: translateY(100%) !important;
+    transform: translateY(100%);
     opacity: 0 !important;
     pointer-events: none !important;
     transition:
       transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    z-index: 99999 !important; /* Очень высокий приоритет */
+    z-index: 99999 !important;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6) !important;
     overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 
+  /* Когда меню открыто */
   .settings-menu.mobile-bottom.open {
-    transform: translateY(0) !important;
+    transform: translateY(0);
     opacity: 1 !important;
     pointer-events: auto !important;
+  }
+
+  /* Стили для dragging состояния - отключаем transition */
+  .settings-menu.mobile-bottom.dragging {
+    transition: none !important;
+    will-change: transform !important;
   }
 
   /* Индикатор сверху (полоска) */
@@ -900,6 +897,13 @@ video {
     position: sticky;
     top: 8px;
     z-index: 1;
+  }
+
+  /* Индикатор при перетаскивании */
+  .settings-menu.mobile-bottom.dragging::before {
+    background: rgba(255, 255, 255, 0.6);
+    transform: scaleX(0.8);
+    transition: all 0.2s ease;
   }
 
   /* Заголовок меню */
@@ -933,7 +937,7 @@ video {
     color: #fff;
   }
 
-  /* Элементы меню на мобилке - УБИРАЕМ pointer-events: none */
+  /* Элементы меню на мобилке */
   .settings-menu.mobile-bottom .settings-item {
     padding: 14px 20px !important;
     font-size: 15px !important;
@@ -941,7 +945,7 @@ video {
     cursor: pointer !important;
     position: relative;
     z-index: 1;
-    pointer-events: auto !important; /* КРИТИЧНО - чтобы работали клики */
+    pointer-events: auto !important;
   }
 
   .settings-menu.mobile-bottom .settings-item:active {
@@ -955,7 +959,7 @@ video {
     cursor: pointer !important;
     position: relative;
     z-index: 1;
-    pointer-events: auto !important; /* КРИТИЧНО - чтобы работали клики */
+    pointer-events: auto !important;
   }
 
   .settings-menu.mobile-bottom .settings-quality:active {
@@ -997,13 +1001,6 @@ video {
   .settings-menu.mobile-bottom::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.2);
     border-radius: 2px;
-  }
-
-  /* Индикатор при свайпе */
-  .settings-menu.mobile-bottom.swiping::before {
-    background: rgba(255, 255, 255, 0.6);
-    transform: scaleX(0.8);
-    transition: all 0.2s ease;
   }
 }
 

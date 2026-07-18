@@ -16,8 +16,8 @@ const SETTINGS = {
 let state = {
   hlsInstance: null,
   savedQualityValue:
-    parseInt(localStorage.getItem(SETTINGS.qualityPosition)) || 1080, // Сохраняем значение в пикселях
-  savedQualityIndex: 0, // Индекс в текущем массиве уровней
+    parseInt(localStorage.getItem(SETTINGS.qualityPosition)) || 1080,
+  savedQualityIndex: 0,
   autoplayEnabled: localStorage.getItem(SETTINGS.autoplayEnabled) === "1",
   repeatEnabled: localStorage.getItem(SETTINGS.repeatEnabled) === "1",
   player: null,
@@ -28,6 +28,20 @@ let state = {
   audioSettingsBtn: null,
   isMobile: window.innerWidth <= 900,
   overlay: null,
+
+  // Bottom Sheet состояние
+  sheet: {
+    isDragging: false,
+    startY: 0,
+    currentY: 0,
+    offset: 0, // текущее смещение в пикселях
+    velocity: 0,
+    lastMoveY: 0,
+    lastMoveTime: 0,
+    isClosing: false,
+    maxOffset: 0, // максимальное смещение (высота меню)
+    isAtTop: true, // скролл вверху
+  },
 };
 
 /**
@@ -70,21 +84,14 @@ export function initSettings(
   state.settingsBtn = settingsBtnElement;
   state.audioSettingsBtn = audioSettingsBtnElement;
 
-  // Создаем оверлей для мобилки
   createOverlay();
-
-  // Добавляем заголовок в меню для мобилки
   addMobileHeader();
-
-  // Навешиваем обработчики
   setupEventListeners();
-
-  // Обработка изменения размера окна
   window.addEventListener("resize", handleResize);
 
-  setupSwipeToClose();
+  // Заменяем setupSwipeToClose на setupBottomSheet
+  setupBottomSheet();
 
-  // Возвращаем начальное состояние для автоплея и повтора
   return {
     autoplayEnabled: state.autoplayEnabled,
     repeatEnabled: state.repeatEnabled,
@@ -427,259 +434,263 @@ export function getSettings() {
 /**
  * Открытие меню настроек
  */
-/**
- * Открытие меню настроек
- */
 function openSettingsMenu() {
   if (!state.settingsMenu) return;
 
   const menu = state.settingsMenu;
   const isMobile = isMobileDevice();
 
+  // Сбрасываем состояние Bottom Sheet
+  const sheet = state.sheet;
+  sheet.isDragging = false;
+  sheet.isClosing = false;
+  sheet.startY = 0;
+  sheet.currentY = 0;
+  sheet.offset = 0;
+  sheet.velocity = 0;
+
   if (isMobile) {
-    // Мобильный режим - как на YouTube
     menu.classList.add("mobile-bottom");
 
-    // Показываем оверлей
-    if (state.overlay) {
-      state.overlay.classList.add("active");
-    }
-
-    // Закрываем меню качества
     if (state.qualityMenu) {
       state.qualityMenu.style.display = "none";
       state.qualityMenu.classList.remove("active");
-      state.qualityMenu.style.maxHeight = "";
-      state.qualityMenu.style.overflowY = "";
     }
 
-    // Открываем меню
     menu.classList.add("open");
-
-    // Убираем старые inline стили
+    menu.style.transform = "";
+    menu.style.transition = "";
     menu.style.display = "";
     menu.style.opacity = "";
     menu.style.pointerEvents = "";
-    menu.style.transform = "";
-    menu.style.maxHeight = "";
-    menu.style.overflowY = "";
 
-    // Поднимаем videoWrapper выше описания
     const videoWrapper = document.getElementById("videoWrapper");
     if (videoWrapper) {
       videoWrapper.classList.add("menu-open");
     }
 
-    // Блокируем скролл страницы
     document.body.style.overflow = "hidden";
+
+    history.pushState({ settingsOpen: true }, "", location.href);
   } else {
-    // Десктопный режим
     menu.classList.remove("mobile-bottom");
 
-    // Закрываем меню качества
     if (state.qualityMenu) {
       state.qualityMenu.style.display = "none";
       state.qualityMenu.classList.remove("active");
-      state.qualityMenu.style.maxHeight = "";
-      state.qualityMenu.style.overflowY = "";
     }
 
     menu.classList.add("open");
+    menu.style.transform = "";
+    menu.style.transition = "";
     menu.style.display = "";
     menu.style.opacity = "";
     menu.style.pointerEvents = "";
-    menu.style.transform = "";
-    menu.style.maxHeight = "";
-    menu.style.overflowY = "";
   }
 }
 
 /**
  * Закрытие всех меню
  */
-/**
- * Закрытие всех меню
- */
 function closeAllMenus() {
-  // Убираем класс menu-open с videoWrapper
+  const sheet = state.sheet;
+  sheet.isDragging = false;
+  sheet.isClosing = false;
+  sheet.startY = 0;
+  sheet.currentY = 0;
+  sheet.offset = 0;
+  sheet.velocity = 0;
+
   const videoWrapper = document.getElementById("videoWrapper");
   if (videoWrapper) {
     videoWrapper.classList.remove("menu-open");
   }
 
-  // Закрываем меню качества
   if (state.qualityMenu) {
-    state.qualityMenu.style.maxHeight = "";
-    state.qualityMenu.style.overflowY = "";
     state.qualityMenu.style.display = "none";
     state.qualityMenu.classList.remove("active");
   }
 
-  // Закрываем меню настроек
   if (state.settingsMenu) {
     state.settingsMenu.classList.remove("open");
-    // Убираем inline стили
+    state.settingsMenu.classList.remove("dragging");
+    state.settingsMenu.style.transform = "";
+    state.settingsMenu.style.transition = "";
     state.settingsMenu.style.display = "";
     state.settingsMenu.style.opacity = "";
     state.settingsMenu.style.pointerEvents = "";
-    state.settingsMenu.style.transform = "";
   }
 
-  // Скрываем оверлей
-  if (state.overlay) {
-    state.overlay.classList.remove("active");
-  }
-
-  // Разблокируем скролл страницы
   document.body.style.overflow = "";
 }
 
 /**
- * Обработка свайпа вниз для закрытия меню (мобильная версия)
+ * Установка обработчиков Bottom Sheet
  */
-/**
- * Обработка свайпа вниз для закрытия меню (как на YouTube)
- */
-function setupSwipeToClose() {
+function setupBottomSheet() {
   if (!state.settingsMenu) return;
-
-  let startY = 0;
-  let currentY = 0;
-  let isDragging = false;
-  let menuHeight = 0;
-  let startTransform = 0;
 
   const menu = state.settingsMenu;
 
-  // Начало касания
-  menu.addEventListener(
-    "touchstart",
-    (e) => {
-      if (!menu.classList.contains("open")) return;
-      if (e.touches.length !== 1) return;
-
-      // Проверяем, что скролл вверху
-      if (menu.scrollTop > 0) return;
-
-      startY = e.touches[0].clientY;
-      currentY = startY;
-      isDragging = true;
-      menuHeight = menu.getBoundingClientRect().height;
-      startTransform = 0;
-
-      // Убираем transition для плавного следования за пальцем
-      menu.style.transition = "none";
-    },
-    { passive: true },
-  );
-
-  // Перемещение пальца
-  menu.addEventListener(
-    "touchmove",
-    (e) => {
-      if (!isDragging) return;
-      if (e.touches.length !== 1) return;
-
-      currentY = e.touches[0].clientY;
-      const diff = currentY - startY;
-
-      // Только если тянем вниз
-      if (diff <= 0) {
-        // Если тянем вверх - возвращаем на место
-        menu.style.transform = "";
-        menu.style.opacity = "";
-        return;
-      }
-
-      // Вычисляем прогресс свайпа
-      const maxOffset = menuHeight * 0.5;
-      const offset = Math.min(diff, maxOffset);
-      const progress = offset / maxOffset;
-
-      // Плавно смещаем меню вниз и уменьшаем прозрачность
-      menu.style.transform = `translateY(${offset}px)`;
-      menu.style.opacity = 1 - progress * 0.6;
-
-      // Изменяем цвет полоски при свайпе
-      if (progress > 0.2) {
-        menu.classList.add("swiping");
-      } else {
-        menu.classList.remove("swiping");
-      }
-    },
-    { passive: true },
-  );
-
-  // Отпускание пальца
-  menu.addEventListener(
-    "touchend",
-    (e) => {
-      if (!isDragging) return;
-      isDragging = false;
-
-      const diff = currentY - startY;
-      const threshold = menuHeight * 0.15; // 15% высоты меню
-
-      // Возвращаем анимацию
-      menu.style.transition =
-        "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
-      menu.classList.remove("swiping");
-
-      if (diff > threshold && diff > 0) {
-        // Закрываем меню с анимацией вниз
-        const remaining = menuHeight - menuHeight * 0.5;
-        menu.style.transform = `translateY(${menuHeight}px)`;
-        menu.style.opacity = "0";
-
-        // Закрываем после завершения анимации
-        setTimeout(() => {
-          closeAllMenus();
-          // Сбрасываем стили
-          menu.style.transform = "";
-          menu.style.opacity = "";
-          menu.style.transition = "";
-        }, 350);
-      } else {
-        // Возвращаем на место с анимацией
-        menu.style.transform = "";
-        menu.style.opacity = "";
-
-        // Сбрасываем transition через небольшую задержку
-        setTimeout(() => {
-          menu.style.transition = "";
-        }, 400);
-      }
-
-      startY = 0;
-      currentY = 0;
-    },
-    { passive: true },
-  );
-
-  // Если палец ушел за пределы меню
-  menu.addEventListener(
-    "touchcancel",
-    () => {
-      if (isDragging) {
-        isDragging = false;
-        menu.style.transition =
-          "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
-        menu.style.transform = "";
-        menu.style.opacity = "";
-        menu.classList.remove("swiping");
-
-        setTimeout(() => {
-          menu.style.transition = "";
-        }, 400);
-
-        startY = 0;
-        currentY = 0;
-      }
-    },
-    { passive: true },
-  );
+  menu.addEventListener("touchstart", onSheetTouchStart, { passive: true });
+  menu.addEventListener("touchmove", onSheetTouchMove, { passive: false });
+  menu.addEventListener("touchend", onSheetTouchEnd, { passive: true });
+  menu.addEventListener("touchcancel", onSheetTouchCancel, { passive: true });
 }
 
+/**
+ * Начало касания
+ */
+function onSheetTouchStart(e) {
+  if (!state.settingsMenu.classList.contains("open")) return;
+  if (e.touches.length !== 1) return;
+
+  const menu = state.settingsMenu;
+  const sheet = state.sheet;
+
+  // Проверяем скролл
+  sheet.isAtTop = menu.scrollTop <= 0;
+
+  // Если скролл не вверху - не перехватываем жест
+  if (!sheet.isAtTop) return;
+
+  sheet.startY = e.touches[0].clientY;
+  sheet.currentY = sheet.startY;
+  sheet.isDragging = true;
+  sheet.isClosing = false;
+  sheet.velocity = 0;
+  sheet.lastMoveY = sheet.startY;
+  sheet.lastMoveTime = Date.now();
+
+  // Отключаем transition
+  menu.style.transition = "none";
+  menu.classList.add("dragging");
+
+  // Сохраняем максимальное смещение
+  sheet.maxOffset = menu.getBoundingClientRect().height;
+}
+
+/**
+ * Движение пальца
+ */
+function onSheetTouchMove(e) {
+  if (!state.sheet.isDragging) return;
+  if (e.touches.length !== 1) return;
+
+  const menu = state.settingsMenu;
+  const sheet = state.sheet;
+
+  sheet.currentY = e.touches[0].clientY;
+  const deltaY = sheet.currentY - sheet.startY;
+
+  // Вычисляем скорость
+  const now = Date.now();
+  const timeDelta = now - sheet.lastMoveTime;
+  if (timeDelta > 0) {
+    const moveDelta = sheet.currentY - sheet.lastMoveY;
+    sheet.velocity = moveDelta / timeDelta;
+  }
+  sheet.lastMoveY = sheet.currentY;
+  sheet.lastMoveTime = now;
+
+  // Только движение вниз
+  if (deltaY <= 0) {
+    // Если тянем вверх - возвращаем в исходное положение
+    menu.style.transform = "";
+    return;
+  }
+
+  // Расчет смещения с резиновым эффектом
+  const maxOffset = sheet.maxOffset;
+  let offset = deltaY;
+
+  // Резиновый эффект (сопротивление при сильном натяжении)
+  if (offset > maxOffset * 0.3) {
+    const resistance =
+      1 - ((offset - maxOffset * 0.3) / (maxOffset * 0.7)) * 0.5;
+    offset =
+      maxOffset * 0.3 + (offset - maxOffset * 0.3) * Math.max(0.3, resistance);
+  }
+
+  sheet.offset = offset;
+
+  // Применяем трансформацию
+  menu.style.transform = `translateY(${offset}px)`;
+}
+
+/**
+ * Окончание касания
+ */
+function onSheetTouchEnd(e) {
+  const sheet = state.sheet;
+  if (!sheet.isDragging) return;
+  sheet.isDragging = false;
+
+  const menu = state.settingsMenu;
+  const offset = sheet.offset;
+  const velocity = sheet.velocity;
+  const maxOffset = sheet.maxOffset;
+
+  // Убираем класс dragging
+  menu.classList.remove("dragging");
+
+  // Возвращаем transition
+  menu.style.transition = "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
+
+  // Проверяем условия закрытия
+  const shouldClose =
+    offset > maxOffset * 0.15 || // Протащили больше 15%
+    velocity > 0.5 || // Быстрый флик вниз
+    (velocity > 0.3 && offset > maxOffset * 0.1); // Комбинация
+
+  if (shouldClose && !sheet.isClosing) {
+    sheet.isClosing = true;
+
+    // Анимация закрытия
+    menu.style.transform = `translateY(${maxOffset + 50}px)`;
+
+    setTimeout(() => {
+      closeAllMenus();
+      menu.style.transform = "";
+      menu.style.transition = "";
+      sheet.isClosing = false;
+    }, 350);
+  } else {
+    // Возврат на место
+    menu.style.transform = "";
+
+    setTimeout(() => {
+      menu.style.transition = "";
+    }, 400);
+  }
+
+  // Сброс состояния
+  sheet.startY = 0;
+  sheet.currentY = 0;
+  sheet.offset = 0;
+  sheet.velocity = 0;
+}
+
+/**
+ * Отмена касания
+ */
+function onSheetTouchCancel(e) {
+  const sheet = state.sheet;
+  if (!sheet.isDragging) return;
+
+  sheet.isDragging = false;
+  const menu = state.settingsMenu;
+
+  menu.classList.remove("dragging");
+  menu.style.transition = "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
+  menu.style.transform = "";
+
+  sheet.startY = 0;
+  sheet.currentY = 0;
+  sheet.offset = 0;
+  sheet.velocity = 0;
+  sheet.isClosing = false;
+}
 /**
  * Переключение видимости меню настроек
  */
@@ -811,15 +822,6 @@ function setupEventListeners() {
     });
   }
 
-  // --- Закрытие по клику на оверлей (только для мобилки) ---
-  if (state.overlay) {
-    state.overlay.addEventListener("click", (e) => {
-      if (e.target === state.overlay) {
-        closeAllMenus();
-      }
-    });
-  }
-
   // --- Закрытие по клику вне (для всех устройств) ---
   document.addEventListener("click", (e) => {
     const settingsMenu = state.settingsMenu;
@@ -838,9 +840,12 @@ function setupEventListeners() {
   });
 
   // --- Обработка кнопки "Назад" на телефоне ---
-  window.addEventListener("popstate", () => {
+  window.addEventListener("popstate", (e) => {
     if (state.settingsMenu && state.settingsMenu.classList.contains("open")) {
+      // Добавляем запись в историю, чтобы отменить переход назад
+      history.pushState(null, "", location.href);
       closeAllMenus();
+      e.preventDefault();
     }
   });
 
