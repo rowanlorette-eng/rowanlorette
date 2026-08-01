@@ -77,6 +77,10 @@ func ListVideos(storage *sqlite.Storage) http.HandlerFunc {
 	}
 }
 
+// RandomVideoHandler returns an HTTP handler that responds with a random video ID from the storage.
+// It queries the storage for a random video ID and writes it as a plain text response.
+// If an error occurs while retrieving the ID, it returns a 500 Internal Server Error.
+// If no videos are available, it returns a 404 Not Found.
 func RandomVideoHandler(storage *sqlite.Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := storage.GetRandomVideoID()
@@ -93,6 +97,8 @@ func RandomVideoHandler(storage *sqlite.Storage) http.HandlerFunc {
 	}
 }
 
+// writeJSONError writes an HTTP error response in JSON format with the given status code and error message.
+// It sets the Content-Type header to application/json and encodes the error as a JSON object.
 // Вспомогательная функция для JSON ошибок
 func writeJSONError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
@@ -102,6 +108,26 @@ func writeJSONError(w http.ResponseWriter, status int, msg string) {
 	})
 }
 
+// GetVideoHandler returns an HTTP handler that retrieves and returns video details by ID.
+// It extracts the video ID from the URL path (/api/video/{id}), validates it, and fetches
+// the video from the storage.
+//
+// The handler performs the following steps:
+//  1. Extracts and trims the video ID from the URL path.
+//  2. If the ID is empty, returns HTTP 400 (Bad Request) with a JSON error.
+//  3. Fetches the video from storage using storage.GetVideo().
+//  4. If a database error occurs, returns HTTP 500 (Internal Server Error).
+//  5. If the video is not found, returns HTTP 404 (Not Found) with a JSON error.
+//  6. Normalizes the video stage field based on its status:
+//     - "processing" → "init"
+//     - "ready" → "done"
+//     - "error" → "error"
+//     - default → "init"
+//  7. Constructs a VideoResponse with the video data and stream URL.
+//  8. Returns the response as JSON with HTTP 200 OK.
+//
+// The response includes a StreamURL field pointing to the HLS master playlist
+// for the video: /api/stream/{id}/master.m3u8.
 func GetVideoHandler(storage *sqlite.Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := strings.TrimPrefix(r.URL.Path, "/api/video/")
