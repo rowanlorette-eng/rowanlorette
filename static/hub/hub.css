@@ -18,6 +18,11 @@ header {
   top: 0;
 }
 
+.music2 {
+  position: relative;  /* или absolute / fixed / sticky — обязательно! */
+  z-index: 1;        /* любое число, большее чем z-index у header */
+}
+
 nav {
   display: flex;
   justify-content: space-between;
