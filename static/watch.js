@@ -68,6 +68,8 @@ const autoplayIcon = document.getElementById("autoplayIcon");
 const repeatBtn = document.getElementById("repeatBtn");
 const repeatIcon = document.getElementById("repeatIcon");
 
+let videoData = null;
+
 // Обновление иконок
 function updateAutoplayIcon() {
   const settings = getSettings();
@@ -186,6 +188,93 @@ function shuffle(array) {
   }
 }
 
+// ============================================================
+// === MEDIA SESSION API - ИНТЕГРАЦИЯ С СИСТЕМНЫМ ПЛЕЕРОМ ===
+// ============================================================
+
+// Функция обновления метаданных (объявлена глобально, доступна везде)
+function updateMediaSessionInfo(videoDataParam) {
+  if (!videoDataParam) {
+    console.warn("⚠️ Нет данных для обновления медиа-сессии");
+    return;
+  }
+
+  if (!("mediaSession" in navigator)) {
+    console.warn("⚠️ Media Session API не поддерживается");
+    return;
+  }
+
+  const thumbUrl =
+    videoDataParam.thumbnail ||
+    (id ? `http://localhost:8089/api/stream/${id}/thumb.jpg` : null);
+
+  if (!thumbUrl) {
+    console.warn("⚠️ Нет URL для обложки");
+    return;
+  }
+
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: videoDataParam.title || "Видео без названия",
+      artist: videoDataParam.author || "Umbrella Play",
+      artwork: [
+        { src: thumbUrl, sizes: "128x128", type: "image/jpeg" },
+        { src: thumbUrl, sizes: "256x256", type: "image/jpeg" },
+        { src: thumbUrl, sizes: "512x512", type: "image/jpeg" },
+        { src: thumbUrl, sizes: "1024x1024", type: "image/jpeg" },
+      ],
+    });
+
+    navigator.mediaSession.playbackState = player.paused ? "paused" : "playing";
+    console.log("✅ Обложка обновлена для:", videoDataParam.title);
+  } catch (error) {
+    console.error("❌ Ошибка обновления медиа-сессии:", error);
+  }
+}
+
+// Настройка обработчиков (только если API поддерживается)
+if ("mediaSession" in navigator) {
+  // Настройка обработчиков системных кнопок
+  navigator.mediaSession.setActionHandler("play", () => {
+    player.play().catch((err) => console.warn("Ошибка воспроизведения:", err));
+  });
+
+  navigator.mediaSession.setActionHandler("pause", () => {
+    player.pause();
+  });
+
+  navigator.mediaSession.setActionHandler("previoustrack", () => {
+    player.currentTime = Math.max(0, player.currentTime - 10);
+  });
+
+  navigator.mediaSession.setActionHandler("nexttrack", () => {
+    playNextVideo();
+  });
+
+  navigator.mediaSession.setActionHandler("seekto", (details) => {
+    if (details.fastSeek) {
+      player.fastSeek(details.seekTime);
+    } else {
+      player.currentTime = details.seekTime;
+    }
+  });
+
+  // Обновляем состояние при воспроизведении/паузе
+  player.addEventListener("play", () => {
+    if ("mediaSession" in navigator) {
+      navigator.mediaSession.playbackState = "playing";
+    }
+  });
+
+  player.addEventListener("pause", () => {
+    if ("mediaSession" in navigator) {
+      navigator.mediaSession.playbackState = "paused";
+    }
+  });
+
+  console.log("✅ Media Session API успешно настроен!");
+}
+
 async function load() {
   if (!id) {
     const resp = await fetch("/api/random");
@@ -198,10 +287,10 @@ async function load() {
     sessionStorage.setItem("autoplay", "1");
   }
 
-  let videoData;
+  // 🔴 ИСПРАВЛЕНО: Убираем let, используем глобальную переменную
   try {
     const res = await fetch(`/api/video/${id}`);
-    videoData = await res.json();
+    videoData = await res.json(); // <-- Теперь это глобальная переменная
   } catch (err) {
     console.error("Ошибка получения данных видео:", err);
     statusEl.innerText = "Ошибка загрузки видео";
@@ -243,15 +332,11 @@ async function load() {
     hlsInstance.loadSource(streamURL);
     hlsInstance.attachMedia(player);
 
-    // Передаем hlsInstance в модуль настроек
     setHlsInstance(hlsInstance);
 
     hlsInstance.on(Hls.Events.MANIFEST_PARSED, async () => {
       hideLoader();
-
-      // Используем функцию из модуля настроек
       populateQualityMenu(hlsInstance.levels);
-
       refreshQualityDisplay();
 
       if (shouldAutoplayNow()) {
@@ -275,6 +360,11 @@ async function load() {
 
   audioPlayer.src = streamURL;
   loadVideoList(true);
+
+  // 🔴 ДОБАВЛЯЕМ: Обновляем медиа-сессию сразу после загрузки данных
+  if ("mediaSession" in navigator && videoData) {
+    updateMediaSessionInfo(videoData);
+  }
 }
 
 async function loadVideoList(reset = false) {

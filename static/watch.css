@@ -561,7 +561,7 @@ video {
 .desc-content {
   overflow: hidden;
   display: -webkit-box;
-  -webkit-line-clamp: 3; /* сколько строк видно */
+  -webkit-line-clamp: 2; /* сколько строк видно */
   -webkit-box-orient: vertical;
   white-space: pre-wrap;
   line-height: 1.6;
