@@ -226,7 +226,7 @@ function updateMediaSessionInfo(videoDataParam) {
     });
 
     navigator.mediaSession.playbackState = player.paused ? "paused" : "playing";
-    console.log("✅ Обложка обновлена для:", videoDataParam.title);
+    //console.log("✅ Обложка обновлена для:", videoDataParam.title);
   } catch (error) {
     console.error("❌ Ошибка обновления медиа-сессии:", error);
   }
@@ -272,7 +272,7 @@ if ("mediaSession" in navigator) {
     }
   });
 
-  console.log("✅ Media Session API успешно настроен!");
+  //console.log("✅ Media Session API успешно настроен!");
 }
 
 async function load() {
