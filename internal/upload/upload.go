@@ -746,8 +746,10 @@ func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string, all bo
 		args = append(args, profile...)
 
 		args = append(args,
-			"-c:a", "copy",
-			"-pix_fmt", "yuv420p",
+			"-c:a", "aac", // АУДИО перекодируем в AAC
+			"-b:a", "256k", // Битрейт аудио
+			"-ar", "44100", // Частота
+			"-ac", "2", // Стерео
 			"-hls_time", "4",
 			"-hls_playlist_type", "vod",
 			"-hls_segment_filename", filepath.Join(outDir, "seg%03d.ts"),
@@ -765,7 +767,10 @@ func Transcode(storage *sqlite.Storage, id, input, dir, thumbTime string, all bo
 
 			fallback = append(fallback, ffmpegVideoArgs["cpu"]...)
 			fallback = append(fallback,
-				"-c:a", "copy",
+				"-c:a", "aac",
+				"-b:a", "256k",
+				"-ar", "44100",
+				"-ac", "2",
 				"-pix_fmt", "yuv420p",
 				"-hls_time", "4",
 				"-hls_playlist_type", "vod",
